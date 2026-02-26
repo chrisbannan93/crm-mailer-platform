@@ -1,6 +1,14 @@
 import type { AppConfig } from './config.js';
 import { MemoryStore } from './memory-store.js';
-import type { ContactRecord, EngagementEvent, SyncResult, TwentyWebhookPayload, VerticalPack } from './types.js';
+import type {
+  ContactRecord,
+  ContactsSyncCursor,
+  ContactsSyncRunResult,
+  EngagementEvent,
+  SyncResult,
+  TwentyWebhookPayload,
+  VerticalPack,
+} from './types.js';
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso } from './utils.js';
 import { buildSubscriberAttribs } from './vertical.js';
 
@@ -9,6 +17,8 @@ export type ConnectorDeps = {
   store: MemoryStore;
   vertical: VerticalPack;
   twenty: {
+    listContacts(updatedSince?: string, pageCursor?: string): Promise<{ contacts: Array<Record<string, unknown>>; nextCursor?: string }>;
+    getContactByEmail?(email: string): Promise<Record<string, unknown> | null>;
     fetchPersonById(id: string): Promise<Record<string, unknown>>;
     writeEngagement(event: EngagementEvent): Promise<void>;
   };
@@ -36,9 +46,16 @@ export type ConnectorDeps = {
     }): Promise<{ id: number; uuid?: string }>;
     sendCampaignTest(campaignId: number, subscribers: string[]): Promise<void>;
   };
+  logger?: {
+    info(obj: Record<string, unknown>, msg?: string): void;
+    warn(obj: Record<string, unknown>, msg?: string): void;
+    error(obj: Record<string, unknown>, msg?: string): void;
+  };
 };
 
 export class ConnectorService {
+  private contactsSyncInProgress = false;
+
   constructor(private readonly deps: ConnectorDeps) {}
 
   getRecentEvents(limit = 50) {
@@ -104,6 +121,108 @@ export class ConnectorService {
       listId: list.id,
       message: `Synced ${contact.email}`,
     };
+  }
+
+  async syncContactsFromTwenty(options?: { maxContacts?: number }): Promise<ContactsSyncRunResult> {
+    if (this.contactsSyncInProgress) {
+      throw new Error('contacts sync already in progress');
+    }
+    this.contactsSyncInProgress = true;
+
+    const maxContacts = Math.min(Math.max(options?.maxContacts ?? this.deps.config.sync.maxContactsPerRun, 1), 500);
+    const cursorState = this.deps.store.getState<ContactsSyncCursor>('sync.contacts.cursor') ?? {};
+    let pageCursor = cursorState.pageCursor;
+    const updatedSince = cursorState.updatedSince;
+
+    let fetched = 0;
+    let processed = 0;
+    let skippedNoEmail = 0;
+    let maxSeenUpdatedAt = updatedSince;
+    let maxReached = false;
+
+    this.deps.logger?.info({ maxContacts, cursorState }, 'starting contacts sync');
+
+    try {
+      while (fetched < maxContacts) {
+        const requestCursor = pageCursor;
+        const page = await this.deps.twenty.listContacts(updatedSince, requestCursor);
+        const contacts = page.contacts ?? [];
+        if (contacts.length === 0) {
+          pageCursor = undefined;
+          break;
+        }
+
+        const remaining = maxContacts - fetched;
+        const truncated = contacts.length > remaining;
+        const batch = truncated ? contacts.slice(0, remaining) : contacts;
+
+        fetched += batch.length;
+        for (const rawContact of batch) {
+          const mapped = mapTwentyContactToContactRecord(rawContact);
+          if (!mapped) {
+            skippedNoEmail += 1;
+            continue;
+          }
+          await this.syncContact(mapped, 'twenty-poll-sync');
+          processed += 1;
+          if (mapped.updatedAt && (!maxSeenUpdatedAt || new Date(mapped.updatedAt) > new Date(maxSeenUpdatedAt))) {
+            maxSeenUpdatedAt = mapped.updatedAt;
+          }
+        }
+
+        if (truncated) {
+          // Re-run the same page cursor next time. Upserts are idempotent.
+          pageCursor = requestCursor;
+          maxReached = true;
+          break;
+        }
+
+        if (page.nextCursor && fetched < maxContacts) {
+          pageCursor = page.nextCursor;
+          continue;
+        }
+
+        if (page.nextCursor && fetched >= maxContacts) {
+          pageCursor = page.nextCursor;
+          maxReached = true;
+        } else {
+          pageCursor = undefined;
+        }
+        break;
+      }
+
+      const nextState: ContactsSyncCursor = maxReached
+        ? { updatedSince, pageCursor }
+        : { updatedSince: maxSeenUpdatedAt ?? nowIso(), pageCursor: undefined };
+      this.deps.store.setState('sync.contacts.cursor', nextState);
+
+      this.deps.store.addEvent({
+        kind: 'sync',
+        status: 'ok',
+        message: `Twenty contacts sync finished (processed=${processed}, skippedNoEmail=${skippedNoEmail})`,
+        detail: { fetched, processed, skippedNoEmail, nextState, maxReached },
+      });
+
+      this.deps.logger?.info({ fetched, processed, skippedNoEmail, nextState, maxReached }, 'contacts sync completed');
+
+      return {
+        ok: true,
+        fetched,
+        processed,
+        skippedNoEmail,
+        nextCursor: nextState.pageCursor,
+        updatedSince: nextState.updatedSince,
+        maxReached,
+      };
+    } catch (error) {
+      this.deps.logger?.error(
+        { err: error instanceof Error ? error.message : String(error), fetched, processed, skippedNoEmail, updatedSince, pageCursor },
+        'contacts sync failed',
+      );
+      throw error;
+    } finally {
+      this.contactsSyncInProgress = false;
+    }
   }
 
   async handleTwentyWebhook(payload: TwentyWebhookPayload): Promise<{ accepted: boolean; duplicate?: boolean; synced?: boolean; reason?: string }> {
@@ -219,4 +338,64 @@ export class ConnectorService {
       throw error;
     }
   }
+}
+
+function pickString(obj: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = getString(obj[key]);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function pickStringArray(obj: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const value = obj[key];
+    if (Array.isArray(value)) {
+      const items = value
+        .map((entry) => {
+          if (typeof entry === 'string') return entry.trim();
+          if (entry && typeof entry === 'object') {
+            const rec = entry as Record<string, unknown>;
+            return getString(rec.name) ?? getString(rec.label) ?? getString(rec.value) ?? '';
+          }
+          return '';
+        })
+        .filter(Boolean);
+      if (items.length > 0) return Array.from(new Set(items));
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return Array.from(
+        new Set(
+          value
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean),
+        ),
+      );
+    }
+  }
+  return [];
+}
+
+export function mapTwentyContactToContactRecord(raw: Record<string, unknown>): ContactRecord | null {
+  const email = pickString(raw, ['email', 'primaryEmail']);
+  if (!email) return null;
+
+  const firstName = pickString(raw, ['firstName']);
+  const lastName = pickString(raw, ['lastName']);
+  const fullName =
+    pickString(raw, ['name', 'fullName']) ?? ([firstName, lastName].filter(Boolean).join(' ').trim() || undefined);
+
+  return {
+    crmId: pickString(raw, ['id']),
+    email: email.toLowerCase(),
+    firstName,
+    lastName,
+    fullName,
+    phone: pickString(raw, ['phone', 'phoneNumber', 'mobilePhone']),
+    tags: pickStringArray(raw, ['tags', 'tagNames', 'labels']),
+    updatedAt: pickString(raw, ['updatedAt']),
+    raw,
+  };
 }

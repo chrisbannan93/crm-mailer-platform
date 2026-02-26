@@ -6,27 +6,22 @@ function getBody(req: Request): Record<string, unknown> {
   return (req.body ?? {}) as Record<string, unknown>;
 }
 
+function parseMax(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(Math.floor(n), 500);
+}
+
 export function registerSyncRoutes(app: Express, connectorService: ConnectorService): void {
   const syncService = new SyncService(connectorService);
 
   app.post('/sync/contacts', async (req, res, next) => {
     try {
       const body = getBody(req);
-      const contacts = Array.isArray(body.contacts) ? body.contacts : [];
-      const normalized = contacts
-        .map((item) => item as { email?: string; crmId?: string; firstName?: string; lastName?: string; fullName?: string })
-        .filter((c) => Boolean(c.email))
-        .map((c) => ({
-          crmId: c.crmId,
-          email: c.email as string,
-          firstName: c.firstName,
-          lastName: c.lastName,
-          fullName: c.fullName,
-          raw: c,
-        }));
-
-      const results = await syncService.syncContacts(normalized);
-      res.json({ ok: true, count: results.length, data: results });
+      const max = parseMax(req.query.max) ?? parseMax(body.max);
+      const result = await syncService.syncContactsFromTwenty(max);
+      res.json(result);
     } catch (error) {
       next(error);
     }

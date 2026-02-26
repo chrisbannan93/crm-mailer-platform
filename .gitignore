@@ -13,6 +13,9 @@ node_modules/
 connector/dist/
 connector/coverage/
 connector/.vite/
+connector/.npm-cache/
+connector/data/*
+!connector/data/.gitkeep
 
 # Docker/local data
 stack/uploads/

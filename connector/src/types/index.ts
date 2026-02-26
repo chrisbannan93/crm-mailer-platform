@@ -4,6 +4,9 @@ export type ContactRecord = {
   firstName?: string;
   lastName?: string;
   fullName?: string;
+  phone?: string;
+  tags?: string[];
+  updatedAt?: string;
   raw?: unknown;
 };
 
@@ -12,6 +15,21 @@ export type SyncResult = {
   subscriberId?: number;
   listId?: number;
   message: string;
+};
+
+export type ContactsSyncCursor = {
+  updatedSince?: string;
+  pageCursor?: string;
+};
+
+export type ContactsSyncRunResult = {
+  ok: true;
+  fetched: number;
+  processed: number;
+  skippedNoEmail: number;
+  nextCursor?: string;
+  updatedSince?: string;
+  maxReached: boolean;
 };
 
 export type RecentEventKind = 'sync' | 'campaign' | 'engagement' | 'error';

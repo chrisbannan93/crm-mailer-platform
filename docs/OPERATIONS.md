@@ -47,6 +47,32 @@ docker compose --env-file .env logs -f connector
 - Mailpit: `http://localhost:8025`
 - Connector health: `http://localhost:4010/healthz`
 
+## Contact Sync Operations (MVP)
+
+Manual bounded sync run (Twenty -> listmonk):
+```bash
+curl -X POST http://localhost:4010/sync/contacts
+```
+
+Manual bounded sync run with limit override (max `500`):
+```bash
+curl -X POST "http://localhost:4010/sync/contacts?max=100"
+```
+
+Expected behavior:
+- contacts without email are skipped
+- listmonk subscribers are upserted by email (idempotent)
+- subscriber `attribs` include `twentyId`, `phone`, `tags[]`
+- sync cursor (`updatedSince` + pagination cursor) is stored in local connector state file
+
+Scheduler (optional):
+- set `SYNC_INTERVAL_MINUTES` in `connector/.env`
+- connector will run the same bounded sync periodically
+
+State file defaults:
+- `connector/data/state.json` (local dev)
+- path configurable via `SYNC_STATE_FILE`
+
 ## Backups (initial guidance)
 Phase 1 uses Docker volumes. Backup strategy starts simple:
 - export Postgres DB dumps for Twenty and listmonk

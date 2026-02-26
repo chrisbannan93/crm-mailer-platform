@@ -35,6 +35,9 @@ const envSchema = z.object({
   TWENTY_WORKFLOW_WEBHOOK_URL: urlString.optional(),
 
   MAILPIT_BASE_URL: urlString.optional(),
+  SYNC_INTERVAL_MINUTES: z.coerce.number().positive().optional(),
+  SYNC_MAX_CONTACTS_PER_RUN: z.coerce.number().int().positive().default(500),
+  SYNC_STATE_FILE: z.string().default('./data/state.json'),
 });
 
 export type ParsedEnv = z.infer<typeof envSchema>;
@@ -69,6 +72,11 @@ export type AppConfig = {
     workflowWebhookUrl?: string;
   };
   mailpitBaseUrl?: string;
+  sync: {
+    intervalMinutes?: number;
+    maxContactsPerRun: number;
+    stateFile: string;
+  };
 };
 
 export function parseEnv(input: Record<string, string | undefined>): AppConfig {
@@ -104,6 +112,11 @@ export function parseEnv(input: Record<string, string | undefined>): AppConfig {
       workflowWebhookUrl: parsed.TWENTY_WORKFLOW_WEBHOOK_URL,
     },
     mailpitBaseUrl: parsed.MAILPIT_BASE_URL,
+    sync: {
+      intervalMinutes: parsed.SYNC_INTERVAL_MINUTES,
+      maxContactsPerRun: Math.min(parsed.SYNC_MAX_CONTACTS_PER_RUN, 500),
+      stateFile: parsed.SYNC_STATE_FILE,
+    },
   };
 }
 

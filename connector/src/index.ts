@@ -1,5 +1,6 @@
 import { getConfig } from './config/index.js';
 import { startOptionalJobs } from './jobs/index.js';
+import { logger } from './logger.js';
 import { MemoryStore } from './memory-store.js';
 import { createServer } from './server.js';
 import { ConnectorService } from './service.js';
@@ -9,26 +10,27 @@ import { loadVerticalPack } from './services/verticalLoader.js';
 async function main() {
   const config = getConfig();
   const vertical = await loadVerticalPack(config.vertical);
-  const store = new MemoryStore();
+  const store = new MemoryStore(200, config.sync.stateFile);
   const service = new ConnectorService({
     config,
     store,
     vertical,
     twenty: new TwentyClient(config.twenty),
     listmonk: new ListmonkClient(config.listmonk),
+    logger,
   });
   await service.bootstrapDefaultList().catch((error) => {
-    console.warn(`default list bootstrap skipped: ${error instanceof Error ? error.message : String(error)}`);
+    logger.warn({ err: error instanceof Error ? error.message : String(error) }, 'default list bootstrap skipped');
   });
   const app = createServer(config, service);
-  startOptionalJobs();
+  startOptionalJobs({ config, service, logger });
 
   app.listen(config.port, () => {
-    console.log(`connector listening on :${config.port} (vertical=${vertical.name})`);
+    logger.info({ port: config.port, vertical: vertical.name }, 'connector listening');
   });
 }
 
 main().catch((error) => {
-  console.error(error);
+  logger.error({ err: error instanceof Error ? error.message : String(error) }, 'connector startup failed');
   process.exit(1);
 });

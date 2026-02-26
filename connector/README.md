@@ -20,7 +20,7 @@ TypeScript Node/Express microservice that connects Twenty CRM and listmonk.
 ## Endpoints
 - `GET /health`
 - `GET /healthz` (compat alias)
-- `POST /sync/contacts`
+- `POST /sync/contacts` (pull sync from Twenty -> listmonk; bounded run)
 - `POST /sync/lists`
 - `POST /webhooks/listmonk`
 
@@ -47,6 +47,47 @@ npm install
 npm run dev
 npm test
 ```
+
+## Contact Sync MVP (Twenty -> listmonk)
+`POST /sync/contacts` now performs a bounded polling sync from Twenty instead of requiring a posted contacts array.
+
+Behavior:
+- skips contacts without an email
+- upserts listmonk subscriber by email (safe to re-run)
+- stamps subscriber `attribs` with:
+  - `twentyId`
+  - `phone`
+  - `tags` (array)
+- persists sync cursor locally in `connector/data/state.json` by default
+- supports pagination continuation across runs
+
+### Run manually (curl)
+Default bounded run (uses `SYNC_MAX_CONTACTS_PER_RUN`, capped at `500`):
+```bash
+curl -X POST http://localhost:4010/sync/contacts
+```
+
+Override bound for one run (query param):
+```bash
+curl -X POST "http://localhost:4010/sync/contacts?max=100"
+```
+
+Override bound for one run (JSON body):
+```bash
+curl -X POST http://localhost:4010/sync/contacts \
+  -H "Content-Type: application/json" \
+  -d '{"max": 250}'
+```
+
+### Optional scheduler
+Set in `connector/.env`:
+```bash
+SYNC_INTERVAL_MINUTES=5
+SYNC_MAX_CONTACTS_PER_RUN=500
+SYNC_STATE_FILE=./data/state.json
+```
+
+When set, the connector runs the same bounded sync periodically in the background.
 
 ## Build / Start
 ```bash

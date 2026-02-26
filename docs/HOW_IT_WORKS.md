@@ -30,7 +30,7 @@
 ### Sync
 - `POST /webhooks/twenty` - accepts Twenty webhooks (`person.*`), verifies signature (optional), syncs subscriber to listmonk.
 - `POST /sync/person/:id` - manual sync by Twenty person ID (requires `TWENTY_API_KEY`).
-- `POST /sync/contacts` - manual batch sync with a simple contacts array.
+- `POST /sync/contacts` - bounded polling sync from Twenty contacts into listmonk (cursor-based, repeat-safe).
 
 ### Campaigns
 - `POST /campaigns/send-test` - creates a listmonk campaign and sends a test email to the provided address.
@@ -74,4 +74,4 @@ This keeps the core connector industry-agnostic while allowing vertical-specific
 ## Notes / Limitations (Phase 1)
 - listmonk does not provide a native outbound webhook for opens/clicks. The connector solves this by hosting tracking endpoints used inside campaign HTML.
 - Twenty REST object schemas are workspace/version dependent. `workflow_webhook` mode is recommended first for a stable proof.
-- Event storage is in-memory only (intentionally simple for local proof).
+- Recent event feed is in-memory only (intentionally simple for local proof), but contact sync cursor state is persisted locally in `connector/data/state.json` by default.

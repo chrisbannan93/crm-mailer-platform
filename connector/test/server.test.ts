@@ -17,6 +17,10 @@ function makeConfig(): AppConfig {
       writebackMode: 'log',
       engagementNoteEndpoint: '/rest/notes',
     },
+    sync: {
+      maxContactsPerRun: 500,
+      stateFile: './data/test-state.json',
+    },
   };
 }
 
@@ -26,6 +30,7 @@ describe('server', () => {
       getRecentEvents: vi.fn().mockReturnValue([]),
       listLists: vi.fn().mockResolvedValue([]),
       handleTwentyWebhook: vi.fn(),
+      syncContactsFromTwenty: vi.fn().mockResolvedValue({ ok: true, fetched: 0, processed: 0, skippedNoEmail: 0, maxReached: false }),
       syncPersonById: vi.fn(),
       sendTestCampaign: vi.fn(),
       recordEngagement: vi.fn(),

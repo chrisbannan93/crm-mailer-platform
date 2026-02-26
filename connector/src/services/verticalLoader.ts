@@ -67,6 +67,9 @@ export function buildSubscriberAttribs(pack: VerticalPack, contact: ContactRecor
   if (pack.subscriberAttribs.includeTwentyPersonId && contact.crmId) {
     attribs.twentyPersonId = contact.crmId;
   }
+  if (contact.crmId) attribs.twentyId = contact.crmId;
+  if (contact.phone) attribs.phone = contact.phone;
+  attribs.tags = Array.isArray(contact.tags) ? contact.tags : [];
 
   if (contact.firstName) attribs.firstName = contact.firstName;
   if (contact.lastName) attribs.lastName = contact.lastName;

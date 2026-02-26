@@ -2,6 +2,7 @@ import express from 'express';
 import type { Request } from 'express';
 import type { AppConfig } from './config.js';
 import { registerHealthRoutes, registerSyncRoutes, registerWebhookRoutes } from './routes/index.js';
+import { logger } from './logger.js';
 import { ConnectorService } from './service.js';
 import { renderSidecarUi } from './ui.js';
 import { toTransparentGif } from './utils.js';
@@ -28,6 +29,22 @@ export function createServer(config: AppConfig, service: ConnectorService) {
       },
     }),
   );
+
+  app.use((req, res, next) => {
+    const started = Date.now();
+    res.on('finish', () => {
+      logger.info(
+        {
+          method: req.method,
+          path: req.path,
+          statusCode: res.statusCode,
+          durationMs: Date.now() - started,
+        },
+        'http request',
+      );
+    });
+    next();
+  });
 
   registerHealthRoutes(app, config);
   registerSyncRoutes(app, service);
@@ -144,6 +161,7 @@ export function createServer(config: AppConfig, service: ConnectorService) {
 
   app.use((error: unknown, _req: Request, res: express.Response, _next: express.NextFunction) => {
     const message = error instanceof Error ? error.message : String(error);
+    logger.error({ err: message }, 'request failed');
     res.status(500).json({ error: message });
   });
 

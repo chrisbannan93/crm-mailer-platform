@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryStore } from '../src/memory-store.js';
-import { ConnectorService } from '../src/service.js';
+import { ConnectorService, mapTwentyContactToContactRecord } from '../src/service.js';
 import type { AppConfig } from '../src/config.js';
 import type { VerticalPack } from '../src/types.js';
+import { buildSubscriberAttribs } from '../src/services/verticalLoader.js';
 
 function makeConfig(): AppConfig {
   return {
@@ -17,6 +18,10 @@ function makeConfig(): AppConfig {
       restPath: '/rest',
       writebackMode: 'log',
       engagementNoteEndpoint: '/rest/notes',
+    },
+    sync: {
+      maxContactsPerRun: 500,
+      stateFile: './data/test-state.json',
     },
   };
 }
@@ -44,6 +49,7 @@ describe('ConnectorService', () => {
       store: new MemoryStore(),
       vertical,
       twenty: { fetchPersonById: vi.fn(), writeEngagement: vi.fn() },
+      // @ts-expect-error partial mock for this test
       listmonk,
     });
 
@@ -59,5 +65,73 @@ describe('ConnectorService', () => {
     expect(first.synced).toBe(true);
     expect(second.duplicate).toBe(true);
     expect(listmonk.upsertSubscriber).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps contacts and includes required attribs fields', () => {
+    const mapped = mapTwentyContactToContactRecord({
+      id: 'tw_1',
+      email: 'Test@Example.com',
+      firstName: 'Test',
+      phoneNumber: '+61123',
+      tags: ['vip', 'lead'],
+      updatedAt: '2026-02-26T00:00:00Z',
+    });
+
+    expect(mapped).toMatchObject({
+      crmId: 'tw_1',
+      email: 'test@example.com',
+      firstName: 'Test',
+      phone: '+61123',
+      tags: ['vip', 'lead'],
+      updatedAt: '2026-02-26T00:00:00Z',
+    });
+
+    const attribs = buildSubscriberAttribs(vertical, mapped!);
+    expect(attribs.twentyId).toBe('tw_1');
+    expect(attribs.phone).toBe('+61123');
+    expect(attribs.tags).toEqual(['vip', 'lead']);
+  });
+
+  it('bounded sync skips contacts without email and updates cursor state', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 10 }),
+      createCampaign: vi.fn(),
+      sendCampaignTest: vi.fn(),
+    };
+    const twenty = {
+      listContacts: vi
+        .fn()
+        .mockResolvedValueOnce({
+          contacts: [
+            { id: '1', email: 'a@example.com', updatedAt: '2026-02-25T10:00:00Z' },
+            { id: '2', firstName: 'NoEmail', updatedAt: '2026-02-25T11:00:00Z' },
+          ],
+          nextCursor: undefined,
+        }),
+      getContactByEmail: vi.fn(),
+      fetchPersonById: vi.fn(),
+      writeEngagement: vi.fn(),
+    };
+
+    const store = new MemoryStore();
+    const service = new ConnectorService({
+      config: makeConfig(),
+      store,
+      vertical,
+      // @ts-expect-error partial mock shape is sufficient for test
+      twenty,
+      // @ts-expect-error partial mock shape is sufficient for test
+      listmonk,
+    });
+
+    const result = await service.syncContactsFromTwenty({ maxContacts: 500 });
+    expect(result.processed).toBe(1);
+    expect(result.skippedNoEmail).toBe(1);
+    expect(listmonk.upsertSubscriber).toHaveBeenCalledTimes(1);
+    expect(store.getState('sync.contacts.cursor')).toMatchObject({
+      updatedSince: '2026-02-25T10:00:00Z',
+    });
   });
 });

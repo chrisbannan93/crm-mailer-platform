@@ -5,7 +5,7 @@
 **/.env
 **/.env.local
 **/.env.*.local
-**/.env.example
+!**/.env.example
 
 # Node
 node_modules/

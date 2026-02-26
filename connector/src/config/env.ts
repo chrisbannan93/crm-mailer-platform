@@ -25,6 +25,8 @@ const envSchema = z.object({
   LISTMONK_DEFAULT_LIST_NAME: z.string().default('CRM Contacts'),
 
   TWENTY_BASE_URL: urlString.default('http://localhost:3000'),
+  TWENTY_AUTH_MODE: z.enum(['bearer', 'token']).optional(),
+  TWENTY_AUTH_TOKEN: z.string().optional(),
   TWENTY_API_KEY: z.string().optional(),
   TWENTY_GRAPHQL_PATH: z.string().default('/graphql'),
   TWENTY_REST_PATH: z.string().default('/rest'),
@@ -57,6 +59,8 @@ export type AppConfig = {
   };
   twenty: {
     baseUrl: string;
+    authMode?: 'bearer' | 'token';
+    authToken?: string;
     apiKey?: string;
     graphqlPath: string;
     restPath: string;
@@ -90,6 +94,8 @@ export function parseEnv(input: Record<string, string | undefined>): AppConfig {
     },
     twenty: {
       baseUrl: parsed.TWENTY_BASE_URL,
+      authMode: parsed.TWENTY_AUTH_MODE,
+      authToken: parsed.TWENTY_AUTH_TOKEN,
       apiKey: parsed.TWENTY_API_KEY,
       graphqlPath: parsed.TWENTY_GRAPHQL_PATH,
       restPath: parsed.TWENTY_REST_PATH,

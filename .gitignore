@@ -1,0 +1,27 @@
+# Env files
+.env
+*.env
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
+**/.env.example
+
+# Node
+node_modules/
+.npm-cache/
+connector/dist/
+connector/coverage/
+connector/.vite/
+
+# Docker/local data
+stack/uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

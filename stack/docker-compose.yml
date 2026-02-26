@@ -1,0 +1,158 @@
+name: ${PROJECT_NAME:-crm_mailer_local}
+
+services:
+  twenty-server:
+    image: twentycrm/twenty:${TWENTY_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_PORT: 3000
+      SERVER_URL: ${TWENTY_SERVER_URL:-http://localhost:3000}
+      PG_DATABASE_URL: postgres://${TWENTY_PG_USER:-postgres}:${TWENTY_PG_PASSWORD:-postgres}@twenty-db:5432/${TWENTY_PG_DB:-default}
+      REDIS_URL: redis://twenty-redis:6379
+      STORAGE_TYPE: local
+      APP_SECRET: ${TWENTY_APP_SECRET}
+    depends_on:
+      twenty-db:
+        condition: service_healthy
+      twenty-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:3000/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - twenty-server-local-data:/app/packages/twenty-server/.local-storage
+
+  twenty-worker:
+    image: twentycrm/twenty:${TWENTY_TAG:-latest}
+    restart: unless-stopped
+    command: ["yarn", "worker:prod"]
+    environment:
+      SERVER_URL: ${TWENTY_SERVER_URL:-http://localhost:3000}
+      PG_DATABASE_URL: postgres://${TWENTY_PG_USER:-postgres}:${TWENTY_PG_PASSWORD:-postgres}@twenty-db:5432/${TWENTY_PG_DB:-default}
+      REDIS_URL: redis://twenty-redis:6379
+      STORAGE_TYPE: local
+      APP_SECRET: ${TWENTY_APP_SECRET}
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+    depends_on:
+      twenty-db:
+        condition: service_healthy
+      twenty-server:
+        condition: service_healthy
+    volumes:
+      - twenty-server-local-data:/app/packages/twenty-server/.local-storage
+
+  twenty-db:
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${TWENTY_PG_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${TWENTY_PG_DB:-default}
+      POSTGRES_USER: ${TWENTY_PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${TWENTY_PG_PASSWORD:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TWENTY_PG_USER:-postgres} -h localhost -d ${TWENTY_PG_DB:-default}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - twenty-db-data:/var/lib/postgresql/data
+
+  twenty-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  listmonk-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LISTMONK_DB_PORT:-5434}:5432"
+    environment:
+      POSTGRES_USER: ${LISTMONK_DB_USER:-listmonk}
+      POSTGRES_PASSWORD: ${LISTMONK_DB_PASSWORD:-listmonk}
+      POSTGRES_DB: ${LISTMONK_DB_NAME:-listmonk}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LISTMONK_DB_USER:-listmonk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - listmonk-db-data:/var/lib/postgresql/data
+
+  listmonk:
+    image: listmonk/listmonk:latest
+    restart: unless-stopped
+    ports:
+      - "${LISTMONK_PORT:-9000}:9000"
+    hostname: localhost
+    depends_on:
+      listmonk-db:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-c",
+        "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"
+      ]
+    environment:
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_db__user: ${LISTMONK_DB_USER:-listmonk}
+      LISTMONK_db__password: ${LISTMONK_DB_PASSWORD:-listmonk}
+      LISTMONK_db__database: ${LISTMONK_DB_NAME:-listmonk}
+      LISTMONK_db__host: listmonk-db
+      LISTMONK_db__port: 5432
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_db__max_open: 25
+      LISTMONK_db__max_idle: 25
+      LISTMONK_db__max_lifetime: 300s
+      TZ: Etc/UTC
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:-}
+    volumes:
+      - ./uploads:/listmonk/uploads:rw
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  connector:
+    build:
+      context: ..
+      dockerfile: connector/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../connector/.env
+    environment:
+      PORT: ${CONNECTOR_PORT:-4010}
+      VERTICAL: ${VERTICAL:-generic}
+      TWENTY_BASE_URL: ${TWENTY_SERVER_URL:-http://twenty-server:3000}
+      LISTMONK_BASE_URL: http://listmonk:9000
+      MAILPIT_BASE_URL: http://mailpit:8025
+    ports:
+      - "${CONNECTOR_PORT:-4010}:${CONNECTOR_PORT:-4010}"
+    depends_on:
+      twenty-server:
+        condition: service_healthy
+      listmonk-db:
+        condition: service_healthy
+      listmonk:
+        condition: service_started
+
+volumes:
+  twenty-db-data:
+  twenty-server-local-data:
+  listmonk-db-data:

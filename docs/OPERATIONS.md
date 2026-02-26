@@ -1,110 +1,237 @@
 # OPERATIONS
 
-## Running The Platform (local)
+## Runbook (Local Linux / Docker)
 
-### Start
+This project is designed to be operated from the repo root with `make` targets and helper scripts.
+
+## Primary Commands
+
+### Start / bootstrap
 ```bash
-cd stack
-cp .env.example .env   # first run only
-cd ../connector
-cp .env.example .env   # first run only
-cd ../stack
-docker compose --env-file .env up -d --build
+make up
+```
+What it does:
+- copies missing `stack/.env` and `connector/.env` from examples
+- starts the Docker Compose stack (`up -d --build`)
+
+### Stop stack
+```bash
+make down
 ```
 
-### Stop
+### Follow logs
 ```bash
-cd stack
-docker compose --env-file .env down
+make logs
 ```
 
-### Reset (destructive local reset)
+### Status (compose + HTTP health checks)
 ```bash
-cd stack
-docker compose --env-file .env down -v
+make status
+```
+This runs `scripts/status.sh` and checks:
+- Compose service status
+- Twenty health endpoint
+- listmonk HTTP endpoint
+- connector health endpoint
+- Mailer Studio status endpoint
+- Mailpit UI endpoint
+
+### Connector tests
+```bash
+make test
 ```
 
-## Logs
-
-### All services
-```bash
-cd stack
-docker compose --env-file .env logs -f
-```
-
-### Specific services
-```bash
-cd stack
-docker compose --env-file .env logs -f twenty-server
-docker compose --env-file .env logs -f listmonk
-docker compose --env-file .env logs -f connector
-```
-
-## Health / URLs
+## URLs (default local ports)
 - Twenty: `http://localhost:3000`
 - listmonk: `http://localhost:9000`
-- Connector: `http://localhost:4010`
-- Mailpit: `http://localhost:8025`
-- Connector health: `http://localhost:4010/healthz`
+- Connector API: `http://localhost:4010`
+- Mailer Studio UI: `http://localhost:4010/`
+- Mailpit UI: `http://localhost:8025`
 
-## Contact Sync Operations (MVP)
+## Backup / Restore
 
-Manual bounded sync run (Twenty -> listmonk):
+### Backup
+Create a timestamped backup under `./backups/<UTC timestamp>/`:
+```bash
+make backup
+```
+
+What is included:
+- `twenty.sql.gz` (Twenty Postgres dump)
+- `listmonk.sql.gz` (listmonk Postgres dump)
+- `listmonk-uploads.tar.gz` (if `stack/uploads/` exists)
+- `manifest.txt` (non-secret metadata only)
+
+What is NOT included (by design):
+- `stack/.env`
+- `connector/.env`
+- any API tokens, passwords, or secrets
+
+### Restore (latest backup)
+```bash
+make restore
+```
+
+### Restore (specific backup)
+```bash
+make restore BACKUP=backups/20260226T120000Z
+```
+
+Restore behavior:
+- ensures DB services are running
+- stops app services during restore (`twenty-server`, `twenty-worker`, `listmonk`, `connector`)
+- resets `public` schema in both DBs before importing dumps
+- restores listmonk uploads if present
+
+## Direct Scripts (if you prefer)
+- `./scripts/bootstrap.sh`
+- `./scripts/status.sh`
+- `./scripts/backup.sh`
+- `./scripts/restore.sh [--backup backups/<timestamp>]`
+
+## Sync Operations (MVP)
+
+### Contact sync (Twenty -> listmonk)
 ```bash
 curl -X POST http://localhost:4010/sync/contacts
 ```
 
-Manual bounded sync run with limit override (max `500`):
+With bound override (max `500`):
 ```bash
 curl -X POST "http://localhost:4010/sync/contacts?max=100"
 ```
 
 Expected behavior:
-- contacts without email are skipped
-- listmonk subscribers are upserted by email (idempotent)
-- subscriber `attribs` include `twentyId`, `phone`, `tags[]`
-- sync cursor (`updatedSince` + pagination cursor) is stored in local connector state file
+- skips contacts without email
+- upserts subscribers by email (idempotent)
+- stores sync cursor locally (`connector/data/state.json` by default)
 
-Segment/list reconciliation run:
+### Segment/list reconciliation
 ```bash
 curl -X POST http://localhost:4010/sync/lists
 ```
 
-Expected behavior for `/sync/lists`:
-- reads `segments.json` from the active vertical pack config directory
-- ensures matching listmonk lists exist
-- computes desired memberships from Twenty contacts using segment rules (tags/fields)
-- applies add/remove membership changes in listmonk
-- repeats safely; next run re-evaluates from current Twenty contact data
+Expected behavior:
+- reads `verticals/<VERTICAL>/config/segments.json`
+- ensures listmonk lists exist
+- computes desired memberships from Twenty contacts
+- applies add/remove membership diffs in listmonk
 
-Scheduler (optional):
-- set `SYNC_INTERVAL_MINUTES` in `connector/.env`
-- connector will run the same bounded sync periodically
+## Webhook Operations (MVP)
+- listmonk webhook endpoint: `POST /webhooks/listmonk`
+- docs + sample payloads: `docs/WEBHOOKS.md`
 
-State file defaults:
-- `connector/data/state.json` (local dev)
-- path configurable via `SYNC_STATE_FILE`
+## Mailer Studio Operations
+- Connector-hosted UI: `http://localhost:4010/`
+- Twenty nav integration (official apps alpha): `twenty-apps/mailer-studio-nav/`
+- docs: `docs/MAILER_STUDIO.md`
 
-## Backups (initial guidance)
-Phase 1 uses Docker volumes. Backup strategy starts simple:
-- export Postgres DB dumps for Twenty and listmonk
-- copy important env files (`stack/.env`, `connector/.env`)
-- optionally archive `stack/uploads/`
+## Troubleshooting
 
-### Example placeholder backup locations (ignored by git)
-- `backups/`
-- `*.dump`
-- `*.sql`
-- `*.tar.gz`
+### `make up` fails because env files are missing
+Run:
+```bash
+./scripts/bootstrap.sh
+```
+This creates missing `.env` files from examples.
 
-## Restore (placeholder)
-1. Recreate stack containers
-2. Restore DB dumps into the respective Postgres services
-3. Restore env files
-4. Restart services and validate health endpoints
+### Connector health is failing
+Check connector logs:
+```bash
+docker compose --env-file stack/.env -f stack/docker-compose.yml logs -f connector
+```
+Common causes:
+- invalid Twenty token in `connector/.env`
+- invalid listmonk credentials in `connector/.env`
+- connector port conflict (`4010`)
 
-## Operational TODOs
-- Add scripted backups in `scripts/backup.sh`
-- Add restore walkthrough
-- Add smoke-check script for proof flow
-- Add retention policy for local backups
+### Twenty is up but contact sync fails
+Check:
+- `TWENTY_BASE_URL` in `connector/.env`
+- `TWENTY_AUTH_TOKEN` (or legacy `TWENTY_API_KEY`)
+- API path settings (`TWENTY_REST_PATH`)
+- Connector logs for response status and error details
+
+### listmonk sync fails or lists are not created
+Check:
+- `LISTMONK_BASE_URL` in `connector/.env`
+- `LISTMONK_AUTH_*` credentials
+- listmonk service logs:
+```bash
+docker compose --env-file stack/.env -f stack/docker-compose.yml logs -f listmonk
+```
+
+### Backups fail (`pg_dump` / container not running)
+- Start stack first: `make up`
+- Confirm DB services exist: `make status`
+- Re-run backup: `make backup`
+
+### Restore fails due to import conflicts
+`restore.sh` resets the `public` schema before restore. If it still fails:
+- inspect dump file integrity (`gzip -t backups/<ts>/twenty.sql.gz`)
+- check DB/container logs
+- ensure compatible PostgreSQL major versions (current stack uses Postgres 16 for Twenty, 17 for listmonk)
+
+### Port conflicts
+Default ports:
+- `3000` (Twenty)
+- `9000` (listmonk)
+- `4010` (connector)
+- `8025` / `1025` (Mailpit)
+- `5433` / `5434` (host DB access)
+
+Change host ports in `stack/.env`, then restart:
+```bash
+make down
+make up
+```
+
+## Upgrade Strategy (Minimal / Safe)
+
+### Principles
+- upgrade one subsystem at a time
+- take a backup first
+- verify with `make status` and a small sync test before moving on
+- keep connector API compatibility stable for the Mailer Studio UI and Twenty nav app
+
+### Recommended sequence
+1. `make backup`
+2. Upgrade image tags in `stack/.env` / `stack/docker-compose.yml` (one service family at a time)
+3. `make down`
+4. `make up`
+5. `make status`
+6. Run smoke checks:
+   - `POST /sync/contacts`
+   - `POST /sync/lists`
+   - webhook simulation from `docs/WEBHOOKS.md`
+7. If regression appears, restore from backup:
+   - `make down`
+   - `make restore BACKUP=...`
+   - `make up`
+
+### Twenty upgrades
+- Twenty APIs can vary by version/workspace schema.
+- After upgrade, validate:
+  - `GET /studio/status`
+  - contact sync (`/sync/contacts`)
+  - engagement writeback mode (`workflow_webhook` preferred for resilience)
+
+### listmonk upgrades
+- listmonk runs `--install --idempotent` and `--upgrade --yes` on startup in this stack.
+- After upgrade, verify:
+  - list UI loads
+  - API auth still works via connector
+  - `POST /sync/lists` succeeds
+
+### Connector upgrades
+- run tests before restart:
+```bash
+make test
+cd connector && npm run build
+```
+- then restart stack: `make up`
+
+## Security / Secrets Handling
+- Secrets live in `.env` files only (`stack/.env`, `connector/.env`)
+- Backups intentionally exclude `.env` files and tokens
+- Do not commit populated `.env` files

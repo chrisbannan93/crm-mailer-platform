@@ -56,7 +56,20 @@ export function createServer(config: AppConfig, service: ConnectorService) {
 
   app.get('/events/recent', (req, res) => {
     const limit = Number(req.query.limit ?? 50);
-    res.json({ data: service.getRecentEvents(Number.isFinite(limit) ? limit : 50) });
+    const parsedLimit = Number.isFinite(limit) ? limit : 50;
+    const kind =
+      req.query.kind === 'sync' || req.query.kind === 'engagement' || req.query.kind === 'campaign' || req.query.kind === 'error'
+        ? req.query.kind
+        : undefined;
+    res.json({ data: kind ? service.getRecentEventsByKind(kind, parsedLimit) : service.getRecentEvents(parsedLimit) });
+  });
+
+  app.get('/studio/status', async (_req, res, next) => {
+    try {
+      res.json(await service.getStudioStatus());
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/lists', async (_req, res, next) => {

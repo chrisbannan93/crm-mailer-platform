@@ -26,6 +26,7 @@ export type ConnectorDeps = {
     writeEngagement(event: EngagementEvent): Promise<void>;
   };
   listmonk: {
+    health?(): Promise<unknown>;
     listLists(): Promise<Array<{ id: number; name: string }>>;
     ensureList(input: {
       name: string;
@@ -68,6 +69,69 @@ export class ConnectorService {
     return this.deps.store.listEvents(limit);
   }
 
+  getRecentEventsByKind(kind: 'sync' | 'engagement' | 'campaign' | 'error', limit = 50) {
+    return this.deps.store
+      .listEvents(limit * 3)
+      .filter((event) => event.kind === kind)
+      .slice(0, limit);
+  }
+
+  async getStudioStatus(): Promise<{
+    connector: { ok: true; vertical: string };
+    services: {
+      twenty: { ok: boolean; detail?: string };
+      listmonk: { ok: boolean; detail?: string };
+    };
+    lastSync: {
+      contactsAt?: string;
+      listsAt?: string;
+    };
+    urls: {
+      twenty: string;
+      listmonk: string;
+      connector: string;
+    };
+  }> {
+    const contactsAt = this.deps.store.getState<string>('sync.contacts.lastRunAt');
+    const listsAt = this.deps.store.getState<string>('sync.lists.lastRunAt');
+    let twentyOk = false;
+    let twentyDetail: string | undefined;
+    let listmonkOk = false;
+    let listmonkDetail: string | undefined;
+
+    try {
+      await this.deps.twenty.listContacts(undefined, undefined);
+      twentyOk = true;
+    } catch (error) {
+      twentyDetail = error instanceof Error ? error.message : String(error);
+    }
+
+    try {
+      if (typeof this.deps.listmonk.health === 'function') {
+        await this.deps.listmonk.health();
+      } else {
+        await this.deps.listmonk.listLists();
+      }
+      listmonkOk = true;
+    } catch (error) {
+      listmonkDetail = error instanceof Error ? error.message : String(error);
+    }
+
+    return {
+      connector: { ok: true, vertical: this.deps.vertical.name },
+      services: {
+        twenty: { ok: twentyOk, detail: twentyDetail },
+        listmonk: { ok: listmonkOk, detail: listmonkDetail },
+      },
+      lastSync: { contactsAt: contactsAt ?? undefined, listsAt: listsAt ?? undefined },
+      urls: {
+        twenty: this.deps.config.twenty.baseUrl,
+        listmonk: this.deps.config.listmonk.baseUrl,
+        connector: this.deps.config.publicTrackingBaseUrl,
+      },
+    };
+  }
+
   async bootstrapDefaultList(): Promise<{ id: number; name: string }> {
     const cached = this.deps.store.getState<{ id: number; name: string }>('listmonk.defaultList');
     if (cached) return cached;
@@ -99,6 +163,7 @@ export class ConnectorService {
         message: `No segments configured; ensured default list ${defaultList.name}`,
         detail: { listId: defaultList.id, source: 'sync-lists' },
       });
+      this.deps.store.setState('sync.contacts.lastRunAt', nowIso());
       return [defaultList];
     }
 
@@ -188,6 +253,7 @@ export class ConnectorService {
     }
 
     this.deps.store.setState(snapshotKey, nextSnapshot);
+    this.deps.store.setState('sync.lists.lastRunAt', nowIso());
     this.deps.store.addEvent({
       kind: 'sync',
       status: 'ok',

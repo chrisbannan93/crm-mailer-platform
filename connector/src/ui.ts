@@ -6,117 +6,334 @@ export function renderSidecarUi(config: AppConfig): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CRM Connector</title>
+  <title>Mailer Studio</title>
   <style>
-    :root { --bg:#f4f1e8; --ink:#0d1b1e; --panel:#fffdf7; --accent:#a12f00; --line:#d8d0c0; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background: radial-gradient(circle at 20% 10%, #fff 0, var(--bg) 55%); color: var(--ink); }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
-    h1 { margin: 0 0 10px; font-size: 28px; }
-    .sub { margin: 0 0 20px; color: #4c5a5f; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 16px; }
-    .card { background: var(--panel); border:1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: 0 4px 20px rgba(0,0,0,.03); }
-    label { display:block; font-size: 12px; margin: 8px 0 4px; color:#556; }
-    input, textarea { width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; background: #fff; }
-    textarea { min-height: 90px; }
-    button { margin-top: 10px; border:0; border-radius: 10px; padding: 10px 12px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
-    pre { background:#101518; color:#d9efe5; padding:12px; border-radius:10px; overflow:auto; max-height: 320px; }
-    .row { display:flex; gap: 8px; flex-wrap: wrap; }
-    .pill { display:inline-block; padding: 4px 8px; border-radius: 999px; background:#ece5d8; font-size: 12px; }
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffdf8;
+      --line: #d7cfbf;
+      --ink: #172022;
+      --muted: #5d6a70;
+      --accent: #a53c00;
+      --accent2: #1f6d5e;
+      --danger: #b42318;
+      --ok: #067647;
+      --warn: #b54708;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background:
+        radial-gradient(900px 400px at 5% -10%, #fff8db 0%, transparent 60%),
+        radial-gradient(700px 350px at 100% 0%, #e8f6ff 0%, transparent 65%),
+        var(--bg);
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 22px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .panel {
+      background: linear-gradient(180deg, #fffefb, var(--panel));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(17, 24, 39, .05);
+      padding: 14px;
+    }
+    h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
+    h2 { margin: 0 0 10px; font-size: 16px; }
+    p { margin: 0; color: var(--muted); }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; }
+    .chip {
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      font-size: 12px;
+      color: #304046;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display:inline-block; }
+    .dot.ok { background: #12b76a; }
+    .dot.bad { background: #f04438; }
+    .grid {
+      display:grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .col-4 { grid-column: span 4; }
+    .col-6 { grid-column: span 6; }
+    .col-8 { grid-column: span 8; }
+    .col-12 { grid-column: span 12; }
+    .metric { display:flex; justify-content:space-between; align-items:center; margin:8px 0; padding:8px 0; border-top:1px dashed #e5dece; }
+    .metric:first-of-type { border-top: 0; padding-top: 0; }
+    .metric .k { color: var(--muted); font-size: 13px; }
+    .metric .v { font-weight: 600; font-size: 13px; text-align:right; }
+    .btnRow { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
+    button, a.btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-decoration: none;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    button.primary { background: var(--accent); color: white; }
+    button.secondary { background: var(--accent2); color: white; }
+    a.btn { background: #fff; color: var(--ink); border:1px solid var(--line); }
+    button.ghost { background: #f5f1e8; color: var(--ink); border: 1px solid var(--line); }
+    button:disabled { opacity: .6; cursor: wait; }
+    .small { font-size: 12px; color: var(--muted); }
+    .statusLine { display:flex; align-items:center; gap:8px; margin-top:6px; font-size: 13px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .events {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+      max-height: 520px;
+      overflow: auto;
+    }
+    .evt {
+      border: 1px solid #e6dfcf;
+      background: #fff;
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .evtHead {
+      display:flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .evtMsg { font-weight: 600; font-size: 13px; }
+    .evtMeta { font-size: 12px; color: var(--muted); }
+    .evt pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 11px;
+      color: #32424a;
+      background: #fbfaf7;
+      border: 1px solid #eee6d7;
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .log {
+      background: #101417;
+      color: #d8efe4;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 140px;
+      max-height: 300px;
+      overflow: auto;
+      font-size: 12px;
+    }
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+      .col-4, .col-6, .col-8 { grid-column: span 12; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Connector Sidecar</h1>
-    <p class="sub">Phase 1 local admin UI for sync + test campaign + engagement writeback. Vertical: <strong>${config.vertical}</strong></p>
-    <div class="row">
-      <span class="pill">Twenty: ${config.twenty.baseUrl}</span>
-      <span class="pill">listmonk: ${config.listmonk.baseUrl}</span>
-      <span class="pill">Writeback: ${config.twenty.writebackMode}</span>
-    </div>
-    <div class="grid" style="margin-top:14px">
-      <section class="card">
-        <h3>Manual Sync (person ID)</h3>
-        <label>Twenty Person ID</label>
-        <input id="personId" placeholder="person id" />
-        <button id="syncPersonBtn">Sync Person</button>
+    <section class="hero">
+      <div class="panel">
+        <h1>Mailer Studio</h1>
+        <p>Minimal CRM + listmonk control panel for syncs, health checks, and engagement visibility. Active vertical: <strong>${config.vertical}</strong>.</p>
+        <div class="chips">
+          <span class="chip">Connector <span class="mono">:${config.port}</span></span>
+          <span class="chip">Twenty <span class="mono">${config.twenty.baseUrl}</span></span>
+          <span class="chip">listmonk <span class="mono">${config.listmonk.baseUrl}</span></span>
+          <span class="chip">Writeback <span class="mono">${config.twenty.writebackMode}</span></span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Connections</h2>
+        <div id="connTwenty" class="statusLine"><span class="dot bad"></span>Twenty: checking…</div>
+        <div id="connListmonk" class="statusLine"><span class="dot bad"></span>listmonk: checking…</div>
+        <div class="btnRow">
+          <button id="refreshStatusBtn" class="ghost">Refresh Status</button>
+          <a class="btn" href="${config.listmonk.baseUrl}" target="_blank" rel="noreferrer">Open listmonk UI</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <section class="panel col-4">
+        <h2>Sync Controls</h2>
+        <div class="metric"><span class="k">Last contact sync</span><span id="lastContactsSync" class="v">Never</span></div>
+        <div class="metric"><span class="k">Last list sync</span><span id="lastListsSync" class="v">Never</span></div>
+        <label class="small" for="contactSyncMax">Contact sync max (optional, 1-500)</label>
+        <input id="contactSyncMax" type="number" min="1" max="500" placeholder="500" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;" />
+        <div class="btnRow">
+          <button id="contactSyncBtn" class="primary">Run Contact Sync</button>
+          <button id="listSyncBtn" class="secondary">Run List Sync</button>
+        </div>
+        <p class="small" style="margin-top:10px;">Contact sync is bounded and cursor-based. List sync performs a full segment membership recompute.</p>
       </section>
-      <section class="card">
-        <h3>Test Campaign</h3>
-        <label>Recipient email</label>
-        <input id="campaignTo" placeholder="you@example.com" />
-        <label>Subject</label>
-        <input id="campaignSubject" value="Connector test campaign" />
-        <label>Optional person ID (for writeback links)</label>
-        <input id="campaignPersonId" placeholder="person id" />
-        <button id="sendCampaignBtn">Send Test Campaign</button>
+
+      <section class="panel col-8">
+        <h2>Recent Engagement Events</h2>
+        <div class="btnRow" style="margin-top:0; margin-bottom:10px;">
+          <button id="refreshEngagementBtn" class="ghost">Refresh Engagement Events</button>
+          <button id="refreshAllBtn" class="ghost">Refresh All Events</button>
+        </div>
+        <ul id="engagementEvents" class="events"></ul>
       </section>
-      <section class="card">
-        <h3>Manual Engagement (debug)</h3>
-        <label>Type</label>
-        <input id="engType" value="manual" />
-        <label>Email</label>
-        <input id="engEmail" placeholder="contact@example.com" />
-        <label>Person ID</label>
-        <input id="engPersonId" placeholder="person id" />
-        <button id="engBtn">Post Engagement</button>
+
+      <section class="panel col-12">
+        <h2>Action Output</h2>
+        <pre id="logOut" class="log">Ready.</pre>
       </section>
-      <section class="card">
-        <h3>Recent Events</h3>
-        <button id="refreshBtn">Refresh</button>
-        <pre id="eventsOut">Loading...</pre>
-      </section>
-    </div>
-    <section class="card" style="margin-top:16px">
-      <h3>API Response</h3>
-      <pre id="out">Ready.</pre>
     </section>
   </div>
+
   <script>
-    const out = document.getElementById('out');
-    const eventsOut = document.getElementById('eventsOut');
-    const show = (v) => { out.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
-    async function call(path, options) {
-      const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
+    const $ = (id) => document.getElementById(id);
+    const logOut = $('logOut');
+    let busy = false;
+
+    function setBusy(v) {
+      busy = v;
+      $('contactSyncBtn').disabled = v;
+      $('listSyncBtn').disabled = v;
+      $('refreshStatusBtn').disabled = v;
+      $('refreshEngagementBtn').disabled = v;
+      $('refreshAllBtn').disabled = v;
+    }
+
+    function writeLog(value) {
+      logOut.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
       const text = await res.text();
-      let data;
-      try { data = text ? JSON.parse(text) : {}; } catch { data = text; }
-      if (!res.ok) throw new Error((data && data.error) || text || 'Request failed');
+      let body;
+      try { body = text ? JSON.parse(text) : {}; } catch { body = text; }
+      if (!res.ok) {
+        throw new Error((body && body.error) || text || ('HTTP ' + res.status));
+      }
+      return body;
+    }
+
+    function fmtTime(value) {
+      if (!value) return 'Never';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return String(value);
+      return d.toLocaleString();
+    }
+
+    function setConnLine(el, label, ok, detail) {
+      el.innerHTML = '<span class="dot ' + (ok ? 'ok' : 'bad') + '"></span>' + label + ': ' + (ok ? 'reachable' : 'error');
+      if (detail && !ok) {
+        const hint = document.createElement('div');
+        hint.className = 'small';
+        hint.textContent = detail;
+        el.appendChild(hint);
+      }
+    }
+
+    async function refreshStatus() {
+      const data = await api('/studio/status');
+      setConnLine($('connTwenty'), 'Twenty', data.services?.twenty?.ok, data.services?.twenty?.detail);
+      setConnLine($('connListmonk'), 'listmonk', data.services?.listmonk?.ok, data.services?.listmonk?.detail);
+      $('lastContactsSync').textContent = fmtTime(data.lastSync?.contactsAt);
+      $('lastListsSync').textContent = fmtTime(data.lastSync?.listsAt);
       return data;
     }
-    async function refreshEvents() {
-      const data = await call('/events/recent');
-      eventsOut.textContent = JSON.stringify(data, null, 2);
+
+    function renderEvents(items) {
+      const root = $('engagementEvents');
+      root.innerHTML = '';
+      if (!Array.isArray(items) || items.length === 0) {
+        root.innerHTML = '<li class="evt"><div class="evtMsg">No events yet.</div><div class="evtMeta">Run syncs or webhook simulations to populate this feed.</div></li>';
+        return;
+      }
+      for (const evt of items) {
+        const li = document.createElement('li');
+        li.className = 'evt';
+        const head = document.createElement('div');
+        head.className = 'evtHead';
+        head.innerHTML = '<div class="evtMsg">' + (evt.message || evt.kind) + '</div><div class="evtMeta">' + (evt.createdAt ? fmtTime(evt.createdAt) : '') + '</div>';
+        li.appendChild(head);
+        const meta = document.createElement('div');
+        meta.className = 'evtMeta';
+        meta.textContent = [evt.kind, evt.status].filter(Boolean).join(' · ');
+        li.appendChild(meta);
+        if (evt.detail) {
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(evt.detail, null, 2);
+          li.appendChild(pre);
+        }
+        root.appendChild(li);
+      }
     }
-    document.getElementById('refreshBtn').onclick = () => refreshEvents().catch((e) => show(e.message));
-    document.getElementById('syncPersonBtn').onclick = async () => {
+
+    async function refreshEngagementEvents() {
+      const data = await api('/events/recent?kind=engagement&limit=20');
+      renderEvents(data.data || []);
+    }
+
+    async function refreshAllEventsToLog() {
+      const data = await api('/events/recent?limit=20');
+      writeLog(data);
+    }
+
+    async function runContactSync() {
+      const rawMax = $('contactSyncMax').value.trim();
+      const max = rawMax ? Math.min(Math.max(Number(rawMax), 1), 500) : null;
+      const path = max ? ('/sync/contacts?max=' + encodeURIComponent(String(Math.floor(max)))) : '/sync/contacts';
+      return api(path, { method: 'POST' });
+    }
+
+    async function runListSync() {
+      return api('/sync/lists', { method: 'POST' });
+    }
+
+    async function wrapAction(label, fn) {
+      if (busy) return;
+      setBusy(true);
       try {
-        const id = document.getElementById('personId').value.trim();
-        show(await call('/sync/person/' + encodeURIComponent(id), { method: 'POST' }));
-        await refreshEvents();
-      } catch (e) { show(e.message); }
-    };
-    document.getElementById('sendCampaignBtn').onclick = async () => {
+        const result = await fn();
+        writeLog({ action: label, result });
+        await Promise.all([refreshStatus(), refreshEngagementEvents()]);
+      } catch (err) {
+        writeLog({ action: label, error: err && err.message ? err.message : String(err) });
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    $('refreshStatusBtn').onclick = () => wrapAction('refresh-status', refreshStatus);
+    $('contactSyncBtn').onclick = () => wrapAction('contact-sync', runContactSync);
+    $('listSyncBtn').onclick = () => wrapAction('list-sync', runListSync);
+    $('refreshEngagementBtn').onclick = () => wrapAction('refresh-engagement-events', refreshEngagementEvents);
+    $('refreshAllBtn').onclick = () => wrapAction('refresh-all-events', refreshAllEventsToLog);
+
+    (async () => {
       try {
-        show(await call('/campaigns/send-test', { method: 'POST', body: JSON.stringify({
-          to: document.getElementById('campaignTo').value.trim(),
-          subject: document.getElementById('campaignSubject').value.trim(),
-          personId: document.getElementById('campaignPersonId').value.trim() || undefined,
-        }) }));
-        await refreshEvents();
-      } catch (e) { show(e.message); }
-    };
-    document.getElementById('engBtn').onclick = async () => {
-      try {
-        show(await call('/webhooks/engagement', { method: 'POST', body: JSON.stringify({
-          type: document.getElementById('engType').value.trim(),
-          email: document.getElementById('engEmail').value.trim() || undefined,
-          personId: document.getElementById('engPersonId').value.trim() || undefined,
-          source: 'sidecar-ui'
-        }) }));
-        await refreshEvents();
-      } catch (e) { show(e.message); }
-    };
-    refreshEvents().catch((e) => show(e.message));
+        await refreshStatus();
+        await refreshEngagementEvents();
+      } catch (err) {
+        writeLog(err && err.message ? err.message : String(err));
+      }
+    })();
   </script>
 </body>
 </html>`;

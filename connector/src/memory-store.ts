@@ -4,6 +4,7 @@ import { makeId, nowIso } from './utils.js';
 export class MemoryStore {
   private readonly recentEvents: RecentEvent[] = [];
   private readonly seenKeys = new Set<string>();
+  private readonly state = new Map<string, unknown>();
   private readonly maxEvents: number;
 
   constructor(maxEvents = 200) {
@@ -29,5 +30,13 @@ export class MemoryStore {
 
   listEvents(limit = 50): RecentEvent[] {
     return this.recentEvents.slice(0, limit);
+  }
+
+  setState<T>(key: string, value: T): void {
+    this.state.set(key, value);
+  }
+
+  getState<T>(key: string): T | undefined {
+    return this.state.get(key) as T | undefined;
   }
 }

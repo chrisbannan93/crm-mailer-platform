@@ -3,8 +3,14 @@ import { quoteSqlString } from '../utils.js';
 
 export type ListmonkClientConfig = {
   baseUrl: string;
+  authMode?: 'basic' | 'token' | 'bearer';
+  authUser?: string;
+  authPassword?: string;
+  authToken?: string;
   apiUser?: string;
   apiPassword?: string;
+  retryCount?: number;
+  retryDelayMs?: number;
 };
 
 export type ListmonkList = {
@@ -24,8 +30,33 @@ type Subscriber = {
   lists?: Array<{ id: number }>;
 };
 
+export class ListmonkClientError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly path?: string,
+    readonly responseBody?: unknown,
+  ) {
+    super(message);
+    this.name = 'ListmonkClientError';
+  }
+}
+
 export class ListmonkClient {
   constructor(private readonly config: ListmonkClientConfig) {}
+
+  async health(): Promise<{ ok: true; reachable: true }> {
+    await this.request('/api/lists?per_page=1&minimal=true');
+    return { ok: true, reachable: true };
+  }
+
+  async info(): Promise<{ baseUrl: string; authMode: string; supportsCampaignTestSend: true }> {
+    return {
+      baseUrl: this.config.baseUrl,
+      authMode: this.resolveAuthMode(),
+      supportsCampaignTestSend: true,
+    };
+  }
 
   async listLists(): Promise<ListmonkList[]> {
     const data = await this.request<{ results: ListmonkList[] }>('/api/lists?per_page=all&minimal=true');
@@ -53,6 +84,10 @@ export class ListmonkClient {
         description: input.description ?? '',
       },
     });
+  }
+
+  async findListByName(name: string): Promise<ListmonkList | null> {
+    return (await this.listLists()).find((list) => list.name === name) ?? null;
   }
 
   async findSubscriberByEmail(email: string): Promise<Subscriber | null> {
@@ -91,6 +126,31 @@ export class ListmonkClient {
     return { subscriberId: existing.id };
   }
 
+  async addSubscriberToLists(subscriberId: number, listIds: number[], status: 'confirmed' | 'unconfirmed' = 'confirmed'): Promise<void> {
+    if (listIds.length === 0) return;
+    await this.request('/api/subscribers/lists', {
+      method: 'PUT',
+      body: {
+        ids: [subscriberId],
+        action: 'add',
+        target_list_ids: listIds,
+        status,
+      },
+    });
+  }
+
+  async removeSubscriberFromLists(subscriberId: number, listIds: number[]): Promise<void> {
+    if (listIds.length === 0) return;
+    await this.request('/api/subscribers/lists', {
+      method: 'PUT',
+      body: {
+        ids: [subscriberId],
+        action: 'remove',
+        target_list_ids: listIds,
+      },
+    });
+  }
+
   async createCampaign(input: {
     name: string;
     subject: string;
@@ -123,25 +183,96 @@ export class ListmonkClient {
   }
 
   private async request<T = unknown>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+    return this.requestWithRetry<T>(path, init, this.config.retryCount ?? 2);
+  }
+
+  private async requestWithRetry<T>(
+    path: string,
+    init: { method?: string; body?: unknown } | undefined,
+    retriesRemaining: number,
+  ): Promise<T> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (init?.body !== undefined) headers['Content-Type'] = 'application/json';
-    if (this.config.apiUser && this.config.apiPassword) {
-      headers.Authorization = `Basic ${Buffer.from(`${this.config.apiUser}:${this.config.apiPassword}`).toString('base64')}`;
+
+    const authHeader = this.buildAuthHeader();
+    if (authHeader) headers.Authorization = authHeader;
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.baseUrl}${path}`, {
+        method: init?.method ?? 'GET',
+        headers,
+        body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      });
+    } catch (error) {
+      if (retriesRemaining > 0) {
+        await this.delay(this.config.retryDelayMs ?? 150);
+        return this.requestWithRetry(path, init, retriesRemaining - 1);
+      }
+      throw new ListmonkClientError(
+        `listmonk network error: ${error instanceof Error ? error.message : String(error)}`,
+        undefined,
+        path,
+      );
     }
 
-    const response = await fetch(`${this.config.baseUrl}${path}`, {
-      method: init?.method ?? 'GET',
-      headers,
-      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-    });
-
     const text = await response.text();
-    const json = text ? (JSON.parse(text) as { data?: T; message?: string }) : {};
+    let json: { data?: T; message?: string } | Record<string, unknown> = {};
+    if (text) {
+      try {
+        json = JSON.parse(text) as { data?: T; message?: string };
+      } catch {
+        json = { raw: text };
+      }
+    }
 
     if (!response.ok) {
-      throw new Error(`listmonk ${response.status}: ${json.message ?? text}`);
+      if (response.status >= 500 && retriesRemaining > 0) {
+        await this.delay(this.config.retryDelayMs ?? 150);
+        return this.requestWithRetry(path, init, retriesRemaining - 1);
+      }
+      const message =
+        (json as { message?: string }).message ??
+        (typeof (json as { error?: unknown }).error === 'string' ? ((json as { error: string }).error) : text) ??
+        'request failed';
+      throw new ListmonkClientError(`listmonk ${response.status}: ${message}`, response.status, path, json);
     }
 
     return (json.data ?? (json as unknown)) as T;
+  }
+
+  private resolveAuthMode(): 'basic' | 'token' | 'bearer' | 'none' {
+    if (this.config.authMode) return this.config.authMode;
+    if (this.config.authToken && this.config.authUser) return 'token';
+    if (this.config.authUser && this.config.authPassword) return 'basic';
+    if (this.config.apiUser && this.config.apiPassword) return 'basic';
+    return 'none';
+  }
+
+  private buildAuthHeader(): string | undefined {
+    const mode = this.resolveAuthMode();
+    if (mode === 'none') return undefined;
+
+    // listmonk commonly uses Basic auth where "password" may be an API token.
+    if (mode === 'token') {
+      const user = this.config.authUser ?? this.config.apiUser;
+      const token = this.config.authToken;
+      if (!user || !token) return undefined;
+      return `Basic ${Buffer.from(`${user}:${token}`).toString('base64')}`;
+    }
+
+    if (mode === 'bearer') {
+      const token = this.config.authToken;
+      return token ? `Bearer ${token}` : undefined;
+    }
+
+    const user = this.config.authUser ?? this.config.apiUser;
+    const password = this.config.authPassword ?? this.config.apiPassword;
+    if (!user || !password) return undefined;
+    return `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

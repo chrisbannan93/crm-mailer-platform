@@ -45,18 +45,29 @@ export class ConnectorService {
     return this.deps.store.listEvents(limit);
   }
 
-  async listLists() {
-    return this.deps.listmonk.listLists();
-  }
+  async bootstrapDefaultList(): Promise<{ id: number; name: string }> {
+    const cached = this.deps.store.getState<{ id: number; name: string }>('listmonk.defaultList');
+    if (cached) return cached;
 
-  async syncLists(): Promise<Array<{ id: number; name: string }>> {
     const list = await this.deps.listmonk.ensureList({
-      name: this.deps.vertical.defaultList.name,
+      name: this.deps.config.listmonk.defaultListName || this.deps.vertical.defaultList.name,
       type: this.deps.vertical.defaultList.type,
       optin: this.deps.vertical.defaultList.optin,
       tags: this.deps.vertical.defaultList.tags,
       description: this.deps.vertical.defaultList.description,
     });
+
+    const state = { id: list.id, name: list.name };
+    this.deps.store.setState('listmonk.defaultList', state);
+    return state;
+  }
+
+  async listLists() {
+    return this.deps.listmonk.listLists();
+  }
+
+  async syncLists(): Promise<Array<{ id: number; name: string }>> {
+    const list = await this.bootstrapDefaultList();
 
     this.deps.store.addEvent({
       kind: 'sync',
@@ -69,13 +80,7 @@ export class ConnectorService {
   }
 
   async syncContact(contact: ContactRecord, source: string): Promise<SyncResult> {
-    const list = await this.deps.listmonk.ensureList({
-      name: this.deps.vertical.defaultList.name,
-      type: this.deps.vertical.defaultList.type,
-      optin: this.deps.vertical.defaultList.optin,
-      tags: this.deps.vertical.defaultList.tags,
-      description: this.deps.vertical.defaultList.description,
-    });
+    const list = await this.bootstrapDefaultList();
 
     const attribs = buildSubscriberAttribs(this.deps.vertical, contact);
     const result = await this.deps.listmonk.upsertSubscriber({ contact, listId: list.id, attribs });
@@ -151,13 +156,7 @@ export class ConnectorService {
     personId?: string;
     campaignName?: string;
   }): Promise<{ campaignId: number; testRecipient: string }> {
-    const list = await this.deps.listmonk.ensureList({
-      name: this.deps.vertical.defaultList.name,
-      type: this.deps.vertical.defaultList.type,
-      optin: this.deps.vertical.defaultList.optin,
-      tags: this.deps.vertical.defaultList.tags,
-      description: this.deps.vertical.defaultList.description,
-    });
+    const list = await this.bootstrapDefaultList();
 
     const trackingBase = this.deps.config.publicTrackingBaseUrl;
     const openUrl = new URL('/track/open.gif', trackingBase);

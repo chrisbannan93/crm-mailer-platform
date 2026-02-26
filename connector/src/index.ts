@@ -17,6 +17,9 @@ async function main() {
     twenty: new TwentyClient(config.twenty),
     listmonk: new ListmonkClient(config.listmonk),
   });
+  await service.bootstrapDefaultList().catch((error) => {
+    console.warn(`default list bootstrap skipped: ${error instanceof Error ? error.message : String(error)}`);
+  });
   const app = createServer(config, service);
   startOptionalJobs();
 

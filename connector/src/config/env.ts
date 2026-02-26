@@ -15,9 +15,14 @@ const envSchema = z.object({
   PUBLIC_TRACKING_BASE_URL: urlString.optional(),
 
   LISTMONK_BASE_URL: urlString.default('http://localhost:9000'),
+  LISTMONK_AUTH_MODE: z.enum(['basic', 'token', 'bearer']).optional(),
+  LISTMONK_AUTH_USER: z.string().optional(),
+  LISTMONK_AUTH_PASSWORD: z.string().optional(),
+  LISTMONK_AUTH_TOKEN: z.string().optional(),
   LISTMONK_API_USER: z.string().optional(),
   LISTMONK_API_PASSWORD: z.string().optional(),
   LISTMONK_DEFAULT_LIST_ID: z.coerce.number().int().positive().optional(),
+  LISTMONK_DEFAULT_LIST_NAME: z.string().default('CRM Contacts'),
 
   TWENTY_BASE_URL: urlString.default('http://localhost:3000'),
   TWENTY_API_KEY: z.string().optional(),
@@ -41,9 +46,14 @@ export type AppConfig = {
   publicTrackingBaseUrl: string;
   listmonk: {
     baseUrl: string;
+    authMode?: 'basic' | 'token' | 'bearer';
+    authUser?: string;
+    authPassword?: string;
+    authToken?: string;
     apiUser?: string;
     apiPassword?: string;
     defaultListId?: number;
+    defaultListName: string;
   };
   twenty: {
     baseUrl: string;
@@ -69,9 +79,14 @@ export function parseEnv(input: Record<string, string | undefined>): AppConfig {
     publicTrackingBaseUrl: parsed.PUBLIC_TRACKING_BASE_URL ?? `http://localhost:${parsed.PORT}`,
     listmonk: {
       baseUrl: parsed.LISTMONK_BASE_URL,
+      authMode: parsed.LISTMONK_AUTH_MODE,
+      authUser: parsed.LISTMONK_AUTH_USER,
+      authPassword: parsed.LISTMONK_AUTH_PASSWORD,
+      authToken: parsed.LISTMONK_AUTH_TOKEN,
       apiUser: parsed.LISTMONK_API_USER,
       apiPassword: parsed.LISTMONK_API_PASSWORD,
       defaultListId: parsed.LISTMONK_DEFAULT_LIST_ID,
+      defaultListName: parsed.LISTMONK_DEFAULT_LIST_NAME,
     },
     twenty: {
       baseUrl: parsed.TWENTY_BASE_URL,

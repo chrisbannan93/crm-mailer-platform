@@ -5,6 +5,7 @@ import type {
   ContactsSyncCursor,
   ContactsSyncRunResult,
   EngagementEvent,
+  SegmentDefinition,
   SyncResult,
   TwentyWebhookPayload,
   VerticalPack,
@@ -16,6 +17,7 @@ export type ConnectorDeps = {
   config: AppConfig;
   store: MemoryStore;
   vertical: VerticalPack;
+  segments?: SegmentDefinition[];
   twenty: {
     listContacts(updatedSince?: string, pageCursor?: string): Promise<{ contacts: Array<Record<string, unknown>>; nextCursor?: string }>;
     getContactByEmail?(email: string): Promise<Record<string, unknown> | null>;
@@ -36,6 +38,9 @@ export type ConnectorDeps = {
       listId: number;
       attribs: Record<string, unknown>;
     }): Promise<{ subscriberId: number }>;
+    findSubscriberByEmail(email: string): Promise<{ id: number; email: string } | null>;
+    addSubscriberToLists(subscriberId: number, listIds: number[], status?: 'confirmed' | 'unconfirmed'): Promise<void>;
+    removeSubscriberFromLists(subscriberId: number, listIds: number[]): Promise<void>;
     createCampaign(input: {
       name: string;
       subject: string;
@@ -84,16 +89,116 @@ export class ConnectorService {
   }
 
   async syncLists(): Promise<Array<{ id: number; name: string }>> {
-    const list = await this.bootstrapDefaultList();
+    const defaultList = await this.bootstrapDefaultList();
+    const segments = this.deps.segments ?? [];
+    if (segments.length === 0) {
+      this.deps.store.addEvent({
+        kind: 'sync',
+        status: 'ok',
+        message: `No segments configured; ensured default list ${defaultList.name}`,
+        detail: { listId: defaultList.id, source: 'sync-lists' },
+      });
+      return [defaultList];
+    }
 
+    const segmentLists = await Promise.all(
+      segments.map(async (segment) => ({
+        segment,
+        list: await this.deps.listmonk.ensureList({
+          name: segment.listName,
+          type: segment.list?.type ?? this.deps.vertical.defaultList.type,
+          optin: segment.list?.optin ?? this.deps.vertical.defaultList.optin,
+          tags: segment.list?.tags ?? [...this.deps.vertical.defaultList.tags, `segment:${segment.key}`],
+          description: segment.list?.description ?? segment.description ?? `Segment sync for ${segment.name}`,
+        }),
+      })),
+    );
+
+    const desiredBySegment = new Map<string, Map<string, { contact: ContactRecord; subscriberId?: number }>>();
+    for (const entry of segmentLists) {
+      desiredBySegment.set(entry.segment.key, new Map());
+    }
+
+    let cursor: string | undefined;
+    let fetched = 0;
+    let considered = 0;
+    let skippedNoEmail = 0;
+
+    do {
+      const page = await this.deps.twenty.listContacts(undefined, cursor);
+      const pageContacts = page.contacts ?? [];
+      fetched += pageContacts.length;
+
+      for (const rawContact of pageContacts) {
+        const contact = mapTwentyContactToContactRecord(rawContact);
+        if (!contact) {
+          skippedNoEmail += 1;
+          continue;
+        }
+        considered += 1;
+        for (const entry of segmentLists) {
+          if (matchesSegment(entry.segment, contact)) {
+            desiredBySegment.get(entry.segment.key)!.set(contact.email, { contact });
+          }
+        }
+      }
+
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    const snapshotKey = `sync.lists.membershipSnapshot.${this.deps.vertical.name}`;
+    const previousSnapshot =
+      this.deps.store.getState<Record<string, Record<string, { subscriberId?: number }>>>(snapshotKey) ?? {};
+    const nextSnapshot: Record<string, Record<string, { subscriberId?: number }>> = {};
+    const listResults: Array<{ id: number; name: string }> = [defaultList, ...segmentLists.map((entry) => entry.list)];
+    let adds = 0;
+    let removes = 0;
+
+    for (const entry of segmentLists) {
+      const segmentKey = entry.segment.key;
+      const desiredMap = desiredBySegment.get(segmentKey) ?? new Map();
+      const previousMap = previousSnapshot[segmentKey] ?? {};
+      nextSnapshot[segmentKey] = {};
+
+      for (const [email, desired] of desiredMap.entries()) {
+        const attribs = buildSubscriberAttribs(this.deps.vertical, desired.contact);
+        const upsert = await this.deps.listmonk.upsertSubscriber({
+          contact: desired.contact,
+          listId: defaultList.id,
+          attribs,
+        });
+        await this.deps.listmonk.addSubscriberToLists(upsert.subscriberId, [entry.list.id]);
+        nextSnapshot[segmentKey][email] = { subscriberId: upsert.subscriberId };
+        if (!(email in previousMap)) adds += 1;
+      }
+
+      for (const [email, previous] of Object.entries(previousMap)) {
+        if (desiredMap.has(email)) continue;
+        let subscriberId = previous.subscriberId;
+        if (!subscriberId) {
+          const found = await this.deps.listmonk.findSubscriberByEmail(email);
+          subscriberId = found?.id;
+        }
+        if (subscriberId) {
+          await this.deps.listmonk.removeSubscriberFromLists(subscriberId, [entry.list.id]);
+          removes += 1;
+        }
+      }
+    }
+
+    this.deps.store.setState(snapshotKey, nextSnapshot);
     this.deps.store.addEvent({
       kind: 'sync',
       status: 'ok',
-      message: `Ensured list ${list.name}`,
-      detail: { listId: list.id, source: 'sync-lists' },
+      message: `Segment list sync complete (${segmentLists.length} segments)`,
+      detail: { fetched, considered, skippedNoEmail, adds, removes, segments: segmentLists.map((s) => s.segment.key) },
     });
+    this.deps.logger?.info(
+      { fetched, considered, skippedNoEmail, adds, removes, segments: segmentLists.map((s) => s.segment.key) },
+      'segment list sync completed',
+    );
 
-    return [list];
+    return listResults;
   }
 
   async syncContact(contact: ContactRecord, source: string): Promise<SyncResult> {
@@ -398,4 +503,49 @@ export function mapTwentyContactToContactRecord(raw: Record<string, unknown>): C
     updatedAt: pickString(raw, ['updatedAt']),
     raw,
   };
+}
+
+function matchesSegment(segment: SegmentDefinition, contact: ContactRecord): boolean {
+  const mode = segment.match ?? 'all';
+  const checks = segment.rules.map((rule) => evaluateSegmentRule(rule, contact));
+  return mode === 'any' ? checks.some(Boolean) : checks.every(Boolean);
+}
+
+function evaluateSegmentRule(
+  rule: SegmentDefinition['rules'][number],
+  contact: ContactRecord,
+): boolean {
+  const value = readContactField(contact, rule.field);
+  if (rule.op === 'exists') {
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== undefined && value !== null && `${value}`.trim() !== '';
+  }
+
+  if (rule.op === 'includes') {
+    if (Array.isArray(value)) {
+      return value.some((item) => `${item}`.toLowerCase() === `${rule.value ?? ''}`.toLowerCase());
+    }
+    if (typeof value === 'string') {
+      return value.toLowerCase().includes(`${rule.value ?? ''}`.toLowerCase());
+    }
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => `${item}` === `${rule.value ?? ''}`);
+  }
+  return `${value ?? ''}` === `${rule.value ?? ''}`;
+}
+
+function readContactField(contact: ContactRecord, field: string): unknown {
+  if (field === 'tags') return contact.tags ?? [];
+  if (field === 'email') return contact.email;
+  if (field === 'phone') return contact.phone;
+  if (field === 'firstName') return contact.firstName;
+  if (field === 'lastName') return contact.lastName;
+  if (field === 'fullName') return contact.fullName;
+  if (field === 'crmId' || field === 'twentyId') return contact.crmId;
+
+  const raw = (contact.raw ?? {}) as Record<string, unknown>;
+  return raw[field];
 }

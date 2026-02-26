@@ -77,3 +77,29 @@ export type VerticalPack = {
   };
   notes: string[];
 };
+
+export type SegmentRule = {
+  field: string;
+  op: 'includes' | 'equals' | 'exists';
+  value?: string | number | boolean;
+};
+
+export type SegmentDefinition = {
+  key: string;
+  name: string;
+  description?: string;
+  listName: string;
+  list?: {
+    type?: 'private' | 'public';
+    optin?: 'single' | 'double';
+    tags?: string[];
+    description?: string;
+  };
+  match?: 'all' | 'any';
+  rules: SegmentRule[];
+};
+
+export type SegmentsConfig = {
+  version: number;
+  segments: SegmentDefinition[];
+};

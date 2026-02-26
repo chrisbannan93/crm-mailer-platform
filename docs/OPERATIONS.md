@@ -65,6 +65,18 @@ Expected behavior:
 - subscriber `attribs` include `twentyId`, `phone`, `tags[]`
 - sync cursor (`updatedSince` + pagination cursor) is stored in local connector state file
 
+Segment/list reconciliation run:
+```bash
+curl -X POST http://localhost:4010/sync/lists
+```
+
+Expected behavior for `/sync/lists`:
+- reads `segments.json` from the active vertical pack config directory
+- ensures matching listmonk lists exist
+- computes desired memberships from Twenty contacts using segment rules (tags/fields)
+- applies add/remove membership changes in listmonk
+- repeats safely; next run re-evaluates from current Twenty contact data
+
 Scheduler (optional):
 - set `SYNC_INTERVAL_MINUTES` in `connector/.env`
 - connector will run the same bounded sync periodically

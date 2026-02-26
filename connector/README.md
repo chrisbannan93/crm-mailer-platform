@@ -21,7 +21,7 @@ TypeScript Node/Express microservice that connects Twenty CRM and listmonk.
 - `GET /health`
 - `GET /healthz` (compat alias)
 - `POST /sync/contacts` (pull sync from Twenty -> listmonk; bounded run)
-- `POST /sync/lists`
+- `POST /sync/lists` (segment-driven list reconciliation from `verticals/<VERTICAL>/config/segments.json`)
 - `POST /webhooks/listmonk`
 
 Existing extra endpoints remain available for local proof/debug (campaign test send, tracking, etc.).
@@ -88,6 +88,17 @@ SYNC_STATE_FILE=./data/state.json
 ```
 
 When set, the connector runs the same bounded sync periodically in the background.
+
+## Segment / List Sync MVP
+`POST /sync/lists` reads segment definitions from the active vertical pack and reconciles listmonk list memberships.
+
+Current MVP approach:
+- full recompute desired memberships from all Twenty contacts on each run
+- apply add/remove changes against listmonk using a local membership snapshot in connector state
+- safe and repeatable for local use
+
+Generic example segments are defined in:
+- `../verticals/generic/config/segments.json`
 
 ## Build / Start
 ```bash

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSubscriberAttribs, loadVerticalPack } from '../src/vertical.js';
+import { buildSubscriberAttribs, loadSegmentDefinitions, loadVerticalPack } from '../src/vertical.js';
 
 describe('vertical packs', () => {
   it('loads generic pack by default', async () => {
@@ -25,5 +25,11 @@ describe('vertical packs', () => {
 
     expect(attribs.twentyPersonId).toBe('person_1');
     expect(attribs.vertical).toBe('generic');
+  });
+
+  it('loads and validates generic segments config', async () => {
+    const segments = await loadSegmentDefinitions('generic');
+    expect(segments.map((s) => s.key)).toEqual(['customers', 'leads', 'vip']);
+    expect(segments[0]?.rules[0]).toMatchObject({ field: 'tags', op: 'includes', value: 'customer' });
   });
 });

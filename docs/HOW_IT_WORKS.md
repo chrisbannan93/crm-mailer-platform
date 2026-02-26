@@ -31,6 +31,7 @@
 - `POST /webhooks/twenty` - accepts Twenty webhooks (`person.*`), verifies signature (optional), syncs subscriber to listmonk.
 - `POST /sync/person/:id` - manual sync by Twenty person ID (requires `TWENTY_API_KEY`).
 - `POST /sync/contacts` - bounded polling sync from Twenty contacts into listmonk (cursor-based, repeat-safe).
+- `POST /sync/lists` - segment-driven list reconciliation using `verticals/<VERTICAL>/config/segments.json`.
 
 ### Campaigns
 - `POST /campaigns/send-test` - creates a listmonk campaign and sends a test email to the provided address.
@@ -75,3 +76,4 @@ This keeps the core connector industry-agnostic while allowing vertical-specific
 - listmonk does not provide a native outbound webhook for opens/clicks. The connector solves this by hosting tracking endpoints used inside campaign HTML.
 - Twenty REST object schemas are workspace/version dependent. `workflow_webhook` mode is recommended first for a stable proof.
 - Recent event feed is in-memory only (intentionally simple for local proof), but contact sync cursor state is persisted locally in `connector/data/state.json` by default.
+- Segment list sync uses full desired-membership recompute from Twenty each run, then applies add/remove diffs using a locally persisted membership snapshot. This is simple and robust for local MVP, but manual listmonk UI membership edits may be overwritten on the next sync.

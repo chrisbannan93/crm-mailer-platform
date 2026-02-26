@@ -5,16 +5,18 @@ import { MemoryStore } from './memory-store.js';
 import { createServer } from './server.js';
 import { ConnectorService } from './service.js';
 import { ListmonkClient, TwentyClient } from './clients/index.js';
-import { loadVerticalPack } from './services/verticalLoader.js';
+import { loadSegmentDefinitions, loadVerticalPack } from './services/verticalLoader.js';
 
 async function main() {
   const config = getConfig();
   const vertical = await loadVerticalPack(config.vertical);
+  const segments = await loadSegmentDefinitions(config.vertical);
   const store = new MemoryStore(200, config.sync.stateFile);
   const service = new ConnectorService({
     config,
     store,
     vertical,
+    segments,
     twenty: new TwentyClient(config.twenty),
     listmonk: new ListmonkClient(config.listmonk),
     logger,
@@ -26,7 +28,7 @@ async function main() {
   startOptionalJobs({ config, service, logger });
 
   app.listen(config.port, () => {
-    logger.info({ port: config.port, vertical: vertical.name }, 'connector listening');
+    logger.info({ port: config.port, vertical: vertical.name, segmentCount: segments.length }, 'connector listening');
   });
 }
 

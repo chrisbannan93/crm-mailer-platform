@@ -40,6 +40,9 @@ describe('ConnectorService', () => {
       listLists: vi.fn().mockResolvedValue([]),
       ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
       upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 10 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
       createCampaign: vi.fn(),
       sendCampaignTest: vi.fn(),
     };
@@ -48,7 +51,7 @@ describe('ConnectorService', () => {
       config: makeConfig(),
       store: new MemoryStore(),
       vertical,
-      twenty: { fetchPersonById: vi.fn(), writeEngagement: vi.fn() },
+      twenty: { listContacts: vi.fn(), fetchPersonById: vi.fn(), writeEngagement: vi.fn() },
       // @ts-expect-error partial mock for this test
       listmonk,
     });
@@ -97,6 +100,9 @@ describe('ConnectorService', () => {
       listLists: vi.fn().mockResolvedValue([]),
       ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
       upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 10 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
       createCampaign: vi.fn(),
       sendCampaignTest: vi.fn(),
     };
@@ -133,5 +139,54 @@ describe('ConnectorService', () => {
     expect(store.getState('sync.contacts.cursor')).toMatchObject({
       updatedSince: '2026-02-25T10:00:00Z',
     });
+  });
+
+  it('syncs segment lists from vertical segment definitions', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi
+        .fn()
+        .mockResolvedValueOnce({ id: 1, name: 'CRM Synced Contacts' })
+        .mockResolvedValueOnce({ id: 2, name: 'Customers' })
+        .mockResolvedValueOnce({ id: 3, name: 'VIP' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 42 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
+      createCampaign: vi.fn(),
+      sendCampaignTest: vi.fn(),
+    };
+    const twenty = {
+      listContacts: vi.fn().mockResolvedValue({
+        contacts: [
+          { id: 'p1', email: 'a@example.com', tags: ['customer'] },
+          { id: 'p2', email: 'b@example.com', tags: ['vip'] },
+          { id: 'p3', email: 'c@example.com', tags: ['lead'] },
+        ],
+      }),
+      getContactByEmail: vi.fn(),
+      fetchPersonById: vi.fn(),
+      writeEngagement: vi.fn(),
+    };
+
+    const service = new ConnectorService({
+      config: makeConfig(),
+      store: new MemoryStore(),
+      vertical,
+      segments: [
+        { key: 'customers', name: 'Customers', listName: 'Customers', rules: [{ field: 'tags', op: 'includes', value: 'customer' }] },
+        { key: 'vip', name: 'VIP', listName: 'VIP', rules: [{ field: 'tags', op: 'includes', value: 'vip' }] },
+      ],
+      // @ts-expect-error partial mock shape is sufficient for test
+      twenty,
+      // @ts-expect-error partial mock shape is sufficient for test
+      listmonk,
+    });
+
+    const lists = await service.syncLists();
+    expect(lists.map((l) => l.name)).toEqual(['CRM Synced Contacts', 'Customers', 'VIP']);
+    expect(listmonk.upsertSubscriber).toHaveBeenCalledTimes(2);
+    expect(listmonk.addSubscriberToLists).toHaveBeenCalledWith(42, [2]);
+    expect(listmonk.addSubscriberToLists).toHaveBeenCalledWith(42, [3]);
   });
 });

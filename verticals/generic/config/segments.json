@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "segments": [
+    {
+      "key": "customers",
+      "name": "Customers",
+      "description": "Contacts tagged as customers in Twenty",
+      "listName": "Customers",
+      "match": "all",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "customer" }
+      ]
+    },
+    {
+      "key": "leads",
+      "name": "Leads",
+      "description": "Contacts tagged as leads in Twenty",
+      "listName": "Leads",
+      "match": "all",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "lead" }
+      ]
+    },
+    {
+      "key": "vip",
+      "name": "VIP",
+      "description": "Contacts tagged as VIP in Twenty",
+      "listName": "VIP",
+      "match": "all",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "vip" }
+      ]
+    }
+  ]
+}

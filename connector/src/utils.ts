@@ -9,6 +9,10 @@ export function hmacSha256Hex(secret: string, value: string): string {
   return crypto.createHmac('sha256', secret).update(value).digest('hex');
 }
 
+export function sha256Hex(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
 export function safeEqualHex(a: string, b: string): boolean {
   const aBuf = Buffer.from(a, 'hex');
   const bBuf = Buffer.from(b, 'hex');

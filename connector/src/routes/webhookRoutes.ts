@@ -36,6 +36,16 @@ export function registerWebhookRoutes(app: Express, config: AppConfig, connector
 
   app.post('/webhooks/listmonk', async (req: Request, res, next) => {
     try {
+      const expected = config.listmonkWebhookSecret ?? config.webhookSharedSecret;
+      if (expected) {
+        const headerName = config.listmonkWebhookHeader;
+        const actual = req.header(headerName) ?? req.header(headerName.toLowerCase()) ?? undefined;
+        if (!actual || actual !== expected) {
+          res.status(401).json({ error: `Invalid listmonk webhook token (expected header ${headerName})` });
+          return;
+        }
+      }
+
       const result = await webhookService.handleListmonkWebhook((req.body ?? {}) as Record<string, unknown>);
       res.json({ ok: true, ...result });
     } catch (error) {

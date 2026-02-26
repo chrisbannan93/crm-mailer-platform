@@ -7,6 +7,7 @@ export class MemoryStore {
   private readonly recentEvents: RecentEvent[] = [];
   private readonly seenKeys = new Set<string>();
   private readonly state = new Map<string, unknown>();
+  private readonly ttlKeys = new Map<string, number>();
   private readonly maxEvents: number;
   private readonly stateFilePath?: string;
 
@@ -46,6 +47,17 @@ export class MemoryStore {
     return this.state.get(key) as T | undefined;
   }
 
+  hasRecentKey(key: string): boolean {
+    this.cleanupTtlKeys();
+    const expiresAt = this.ttlKeys.get(key);
+    return typeof expiresAt === 'number' && expiresAt > Date.now();
+  }
+
+  rememberKeyWithTtl(key: string, ttlMs: number): void {
+    this.cleanupTtlKeys();
+    this.ttlKeys.set(key, Date.now() + Math.max(ttlMs, 1000));
+  }
+
   private loadPersistentState(): void {
     if (!this.stateFilePath) return;
     try {
@@ -57,6 +69,14 @@ export class MemoryStore {
       }
     } catch {
       // Ignore corrupt/missing state files and continue with empty state.
+    }
+  }
+
+  private cleanupTtlKeys(): void {
+    if (this.ttlKeys.size === 0) return;
+    const now = Date.now();
+    for (const [key, expiresAt] of this.ttlKeys.entries()) {
+      if (expiresAt <= now) this.ttlKeys.delete(key);
     }
   }
 

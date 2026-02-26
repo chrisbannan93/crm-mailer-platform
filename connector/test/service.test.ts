@@ -10,6 +10,8 @@ function makeConfig(): AppConfig {
     port: 4010,
     nodeEnv: 'test',
     vertical: 'generic',
+    listmonkWebhookHeader: 'X-Webhook-Token',
+    listmonkWebhookDedupTtlSeconds: 3600,
     publicTrackingBaseUrl: 'http://localhost:4010',
     listmonk: { baseUrl: 'http://listmonk:9000' },
     twenty: {
@@ -188,5 +190,62 @@ describe('ConnectorService', () => {
     expect(listmonk.upsertSubscriber).toHaveBeenCalledTimes(2);
     expect(listmonk.addSubscriberToLists).toHaveBeenCalledWith(42, [2]);
     expect(listmonk.addSubscriberToLists).toHaveBeenCalledWith(42, [3]);
+  });
+
+  it('validates and deduplicates listmonk webhook events before writing to Twenty', async () => {
+    const twenty = {
+      listContacts: vi.fn(),
+      getContactByEmail: vi.fn().mockResolvedValue({ id: 'person_1' }),
+      fetchPersonById: vi.fn(),
+      writeEngagement: vi.fn().mockResolvedValue(undefined),
+    };
+    const listmonk = {
+      listLists: vi.fn(),
+      ensureList: vi.fn(),
+      upsertSubscriber: vi.fn(),
+      findSubscriberByEmail: vi.fn(),
+      addSubscriberToLists: vi.fn(),
+      removeSubscriberFromLists: vi.fn(),
+      createCampaign: vi.fn(),
+      sendCampaignTest: vi.fn(),
+    };
+    const service = new ConnectorService({
+      config: makeConfig(),
+      store: new MemoryStore(),
+      vertical,
+      // @ts-expect-error partial mock shape is sufficient for test
+      twenty,
+      // @ts-expect-error partial mock shape is sufficient for test
+      listmonk,
+    });
+
+    const payload = {
+      event: 'email.click',
+      timestamp: '2026-02-26T10:00:00Z',
+      email: 'lead@example.com',
+      campaign_id: 123,
+      url: 'https://example.com/offer',
+      reason: 'test',
+    };
+
+    const first = await service.handleListmonkWebhook(payload);
+    const second = await service.handleListmonkWebhook(payload);
+    const invalid = await service.handleListmonkWebhook({ hello: 'world' });
+
+    expect(first.accepted).toBe(true);
+    expect(second.duplicate).toBe(true);
+    expect(invalid.ignored).toBe(true);
+    expect(twenty.getContactByEmail).toHaveBeenCalledWith('lead@example.com');
+    expect(twenty.writeEngagement).toHaveBeenCalledTimes(1);
+    expect(twenty.writeEngagement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'click',
+        crmActivityType: 'EMAIL_CLICK',
+        personId: 'person_1',
+        email: 'lead@example.com',
+        campaignId: '123',
+        targetUrl: 'https://example.com/offer',
+      }),
+    );
   });
 });

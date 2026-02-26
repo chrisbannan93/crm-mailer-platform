@@ -1,4 +1,5 @@
 import type { AppConfig } from './config.js';
+import { z } from 'zod';
 import { MemoryStore } from './memory-store.js';
 import type {
   ContactRecord,
@@ -10,7 +11,7 @@ import type {
   TwentyWebhookPayload,
   VerticalPack,
 } from './types.js';
-import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso } from './utils.js';
+import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
 import { buildSubscriberAttribs } from './vertical.js';
 
 export type ConnectorDeps = {
@@ -346,13 +347,55 @@ export class ConnectorService {
     return { accepted: true, synced: true };
   }
 
-  async handleListmonkWebhook(payload: Record<string, unknown>): Promise<{ accepted: true }> {
-    this.deps.store.addEvent({
-      kind: 'engagement',
-      status: 'ok',
-      message: 'Received listmonk webhook payload',
-      detail: { source: 'listmonk-webhook', payload },
+  async handleListmonkWebhook(
+    payload: Record<string, unknown>,
+  ): Promise<{ accepted: true; ignored?: boolean; duplicate?: boolean; reason?: string }> {
+    const normalized = parseListmonkWebhookPayload(payload);
+    if (!normalized) {
+      return { accepted: true, ignored: true, reason: 'unsupported webhook payload' };
+    }
+
+    const dedupKey = sha256Hex(
+      [
+        normalized.eventType,
+        normalized.timestamp,
+        normalized.email ?? '',
+        normalized.twentyId ?? '',
+        normalized.campaignId ?? '',
+        normalized.url ?? '',
+        normalized.reason ?? '',
+      ].join('|'),
+    );
+    const ttlMs = this.deps.config.listmonkWebhookDedupTtlSeconds * 1000;
+    if (this.deps.store.hasRecentKey(dedupKey)) {
+      return { accepted: true, duplicate: true, reason: 'duplicate listmonk webhook event' };
+    }
+    this.deps.store.rememberKeyWithTtl(dedupKey, ttlMs);
+
+    let personId = normalized.twentyId;
+    if (!personId && normalized.email && this.deps.twenty.getContactByEmail) {
+      const contact = await this.deps.twenty.getContactByEmail(normalized.email);
+      personId = getString(contact?.id) ?? undefined;
+    }
+
+    const mapped = mapListmonkEventToEngagement(normalized);
+    await this.recordEngagement({
+      type: mapped.type,
+      crmActivityType: mapped.crmActivityType,
+      timestamp: normalized.timestamp,
+      personId: personId ?? undefined,
+      email: normalized.email ?? undefined,
+      campaignId: normalized.campaignId ?? undefined,
+      campaignName: normalized.campaignName ?? undefined,
+      targetUrl: normalized.url ?? undefined,
+      source: 'listmonk-webhook',
+      metadata: {
+        reason: normalized.reason,
+        rawEventType: normalized.eventType,
+        campaignName: normalized.campaignName,
+      },
     });
+
     return { accepted: true };
   }
 
@@ -428,7 +471,9 @@ export class ConnectorService {
           personId: full.personId,
           email: full.email,
           campaignId: full.campaignId,
+          campaignName: full.campaignName,
           targetUrl: full.targetUrl,
+          crmActivityType: full.crmActivityType,
           source: full.source,
         },
       });
@@ -443,6 +488,132 @@ export class ConnectorService {
       throw error;
     }
   }
+}
+
+const listmonkWebhookEventSchema = z.object({
+  event: z.string().optional(),
+  type: z.string().optional(),
+  eventType: z.string().optional(),
+  timestamp: z.string().optional(),
+  ts: z.string().optional(),
+  campaign: z
+    .object({
+      id: z.union([z.string(), z.number()]).optional(),
+      name: z.string().optional(),
+    })
+    .partial()
+    .optional(),
+  campaign_id: z.union([z.string(), z.number()]).optional(),
+  campaignId: z.union([z.string(), z.number()]).optional(),
+  campaign_name: z.string().optional(),
+  campaignName: z.string().optional(),
+  url: z.string().optional(),
+  link: z.string().optional(),
+  reason: z.string().optional(),
+  subscriber: z
+    .object({
+      email: z.string().optional(),
+      attribs: z.record(z.unknown()).optional(),
+    })
+    .partial()
+    .optional(),
+  email: z.string().optional(),
+  attribs: z.record(z.unknown()).optional(),
+  data: z.record(z.unknown()).optional(),
+});
+
+type NormalizedListmonkWebhook = {
+  eventType: string;
+  timestamp: string;
+  email?: string;
+  twentyId?: string;
+  campaignId?: string;
+  campaignName?: string;
+  url?: string;
+  reason?: string;
+};
+
+function parseListmonkWebhookPayload(payload: Record<string, unknown>): NormalizedListmonkWebhook | null {
+  const parsed = listmonkWebhookEventSchema.safeParse(payload);
+  if (!parsed.success) return null;
+
+  const p = parsed.data;
+  const data = (p.data ?? {}) as Record<string, unknown>;
+  const eventType = normalizeListmonkEventType(
+    getString(p.event) ??
+      getString(p.type) ??
+      getString(p.eventType) ??
+      getString(data.event) ??
+      getString(data.type) ??
+      '',
+  );
+  if (!eventType) return null;
+
+  const subscriberAttribs =
+    (p.subscriber?.attribs as Record<string, unknown> | undefined) ??
+    (p.attribs as Record<string, unknown> | undefined) ??
+    ((data.subscriber as Record<string, unknown> | undefined)?.attribs as Record<string, unknown> | undefined) ??
+    (data.attribs as Record<string, unknown> | undefined);
+  const subscriber =
+    (p.subscriber as Record<string, unknown> | undefined) ??
+    ((data.subscriber as Record<string, unknown> | undefined) ?? undefined);
+
+  const email =
+    getString(p.email) ??
+    getString(subscriber?.email) ??
+    getString(data.email) ??
+    getString((data.subscriber as Record<string, unknown> | undefined)?.email);
+
+  const twentyId =
+    getString(subscriberAttribs?.twentyId) ??
+    getString(subscriberAttribs?.twentyPersonId) ??
+    getString(data.twentyId) ??
+    getString(data.personId);
+
+  const campaignIdValue =
+    p.campaign?.id ?? p.campaignId ?? p.campaign_id ?? data.campaignId ?? data.campaign_id ?? (data.campaign as Record<string, unknown> | undefined)?.id;
+  const campaignId = campaignIdValue !== undefined && campaignIdValue !== null ? String(campaignIdValue) : undefined;
+
+  const campaignName =
+    getString(p.campaign?.name) ??
+    getString(p.campaignName) ??
+    getString(p.campaign_name) ??
+    getString((data.campaign as Record<string, unknown> | undefined)?.name) ??
+    getString(data.campaignName);
+
+  const url = getString(p.url) ?? getString(p.link) ?? getString(data.url) ?? getString(data.link);
+  const reason = getString(p.reason) ?? getString(data.reason);
+  const timestamp = getString(p.timestamp) ?? getString(p.ts) ?? getString(data.timestamp) ?? nowIso();
+
+  return {
+    eventType,
+    timestamp,
+    email: email?.toLowerCase(),
+    twentyId: twentyId ?? undefined,
+    campaignId,
+    campaignName: campaignName ?? undefined,
+    url: url ?? undefined,
+    reason: reason ?? undefined,
+  };
+}
+
+function normalizeListmonkEventType(raw: string): 'open' | 'click' | 'bounce' | 'unsubscribe' | null {
+  const value = raw.toLowerCase();
+  if (value.includes('open')) return 'open';
+  if (value.includes('click')) return 'click';
+  if (value.includes('bounce')) return 'bounce';
+  if (value.includes('unsub')) return 'unsubscribe';
+  return null;
+}
+
+function mapListmonkEventToEngagement(input: NormalizedListmonkWebhook): {
+  type: EngagementEvent['type'];
+  crmActivityType: NonNullable<EngagementEvent['crmActivityType']>;
+} {
+  if (input.eventType === 'open') return { type: 'open', crmActivityType: 'EMAIL_OPEN' };
+  if (input.eventType === 'click') return { type: 'click', crmActivityType: 'EMAIL_CLICK' };
+  if (input.eventType === 'bounce') return { type: 'bounce', crmActivityType: 'EMAIL_BOUNCE' };
+  return { type: 'unsubscribe', crmActivityType: 'EMAIL_UNSUB' };
 }
 
 function pickString(obj: Record<string, unknown>, keys: string[]): string | undefined {

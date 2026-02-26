@@ -44,10 +44,12 @@ export type RecentEvent = {
 };
 
 export type EngagementEvent = {
-  type: 'open' | 'click' | 'manual';
+  type: 'open' | 'click' | 'bounce' | 'unsubscribe' | 'manual';
+  crmActivityType?: 'EMAIL_OPEN' | 'EMAIL_CLICK' | 'EMAIL_BOUNCE' | 'EMAIL_UNSUB';
   personId?: string;
   email?: string;
   campaignId?: string;
+  campaignName?: string;
   targetUrl?: string;
   timestamp: string;
   source: string;

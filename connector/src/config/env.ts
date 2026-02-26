@@ -12,6 +12,9 @@ const envSchema = z.object({
 
   WEBHOOK_SHARED_SECRET: z.string().optional(),
   TWENTY_WEBHOOK_SECRET: z.string().optional(),
+  LISTMONK_WEBHOOK_SECRET: z.string().optional(),
+  LISTMONK_WEBHOOK_HEADER: z.string().default('X-Webhook-Token'),
+  LISTMONK_WEBHOOK_DEDUP_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   PUBLIC_TRACKING_BASE_URL: urlString.optional(),
 
   LISTMONK_BASE_URL: urlString.default('http://localhost:9000'),
@@ -48,6 +51,9 @@ export type AppConfig = {
   vertical: string;
   webhookSharedSecret?: string;
   twentyWebhookSecret?: string;
+  listmonkWebhookSecret?: string;
+  listmonkWebhookHeader: string;
+  listmonkWebhookDedupTtlSeconds: number;
   publicTrackingBaseUrl: string;
   listmonk: {
     baseUrl: string;
@@ -88,6 +94,9 @@ export function parseEnv(input: Record<string, string | undefined>): AppConfig {
     vertical: parsed.VERTICAL,
     webhookSharedSecret: parsed.WEBHOOK_SHARED_SECRET,
     twentyWebhookSecret: parsed.TWENTY_WEBHOOK_SECRET,
+    listmonkWebhookSecret: parsed.LISTMONK_WEBHOOK_SECRET,
+    listmonkWebhookHeader: parsed.LISTMONK_WEBHOOK_HEADER,
+    listmonkWebhookDedupTtlSeconds: parsed.LISTMONK_WEBHOOK_DEDUP_TTL_SECONDS,
     publicTrackingBaseUrl: parsed.PUBLIC_TRACKING_BASE_URL ?? `http://localhost:${parsed.PORT}`,
     listmonk: {
       baseUrl: parsed.LISTMONK_BASE_URL,

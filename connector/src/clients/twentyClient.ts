@@ -110,7 +110,11 @@ export class TwentyClient {
         ? `Email click tracked${event.targetUrl ? `: ${event.targetUrl}` : ''}`
         : event.type === 'open'
           ? 'Email open tracked'
-          : 'Email engagement recorded';
+          : event.type === 'bounce'
+            ? `Email bounce recorded${event.metadata?.reason ? `: ${String(event.metadata.reason)}` : ''}`
+            : event.type === 'unsubscribe'
+              ? 'Email unsubscribe recorded'
+              : 'Email engagement recorded';
 
     return {
       title: 'Email engagement',
@@ -120,8 +124,11 @@ export class TwentyClient {
       personId: event.personId,
       email: event.email,
       campaignId: event.campaignId,
+      campaignName: event.campaignName,
+      crmActivityType: event.crmActivityType,
       metadata: {
         type: event.type,
+        crmActivityType: event.crmActivityType,
         source: event.source,
         ...(event.metadata ?? {}),
         ...(event.targetUrl ? { targetUrl: event.targetUrl } : {}),

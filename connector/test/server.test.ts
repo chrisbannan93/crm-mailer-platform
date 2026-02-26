@@ -8,6 +8,8 @@ function makeConfig(): AppConfig {
     port: 4010,
     nodeEnv: 'test',
     vertical: 'generic',
+    listmonkWebhookHeader: 'X-Webhook-Token',
+    listmonkWebhookDedupTtlSeconds: 3600,
     publicTrackingBaseUrl: 'http://localhost:4010',
     listmonk: { baseUrl: 'http://listmonk:9000' },
     twenty: {
@@ -41,5 +43,25 @@ describe('server', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+
+  it('rejects listmonk webhook when shared header token is invalid', async () => {
+    const service = {
+      getRecentEvents: vi.fn().mockReturnValue([]),
+      listLists: vi.fn().mockResolvedValue([]),
+      handleTwentyWebhook: vi.fn(),
+      handleListmonkWebhook: vi.fn(),
+      syncContactsFromTwenty: vi.fn().mockResolvedValue({ ok: true, fetched: 0, processed: 0, skippedNoEmail: 0, maxReached: false }),
+      syncPersonById: vi.fn(),
+      sendTestCampaign: vi.fn(),
+      recordEngagement: vi.fn(),
+    } as any;
+
+    const config = { ...makeConfig(), listmonkWebhookSecret: 'secret123' };
+    const app = createServer(config, service);
+    const res = await request(app).post('/webhooks/listmonk').send({ event: 'email.open', email: 'a@example.com' });
+
+    expect(res.status).toBe(401);
+    expect(service.handleListmonkWebhook).not.toHaveBeenCalled();
   });
 });

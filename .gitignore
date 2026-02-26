@@ -16,10 +16,20 @@ connector/.vite/
 
 # Docker/local data
 stack/uploads/
+docker-data/
+volumes/
+*.volume
 
 # Logs
 *.log
 npm-debug.log*
+
+# Backups / dumps
+backups/
+*.dump
+*.sql
+*.sql.gz
+*.tar.gz
 
 # OS/editor
 .DS_Store

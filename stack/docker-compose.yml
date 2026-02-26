@@ -5,7 +5,7 @@ services:
     image: twentycrm/twenty:${TWENTY_TAG:-latest}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${TWENTY_PORT:-3000}:3000"
     environment:
       NODE_PORT: 3000
       SERVER_URL: ${TWENTY_SERVER_URL:-http://localhost:3000}
@@ -25,6 +25,7 @@ services:
       retries: 20
     volumes:
       - twenty-server-local-data:/app/packages/twenty-server/.local-storage
+    networks: [platform-net]
 
   twenty-worker:
     image: twentycrm/twenty:${TWENTY_TAG:-latest}
@@ -45,6 +46,7 @@ services:
         condition: service_healthy
     volumes:
       - twenty-server-local-data:/app/packages/twenty-server/.local-storage
+    networks: [platform-net]
 
   twenty-db:
     image: postgres:16
@@ -62,6 +64,7 @@ services:
       retries: 10
     volumes:
       - twenty-db-data:/var/lib/postgresql/data
+    networks: [platform-net]
 
   twenty-redis:
     image: redis:7-alpine
@@ -72,6 +75,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    networks: [platform-net]
 
   listmonk-db:
     image: postgres:17-alpine
@@ -89,13 +93,13 @@ services:
       retries: 6
     volumes:
       - listmonk-db-data:/var/lib/postgresql/data
+    networks: [platform-net]
 
   listmonk:
     image: listmonk/listmonk:latest
     restart: unless-stopped
     ports:
-      - "${LISTMONK_PORT:-9000}:9000"
-    hostname: localhost
+      - "127.0.0.1:${LISTMONK_PORT:-9000}:9000"
     depends_on:
       listmonk-db:
         condition: service_healthy
@@ -121,13 +125,15 @@ services:
       LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:-}
     volumes:
       - ./uploads:/listmonk/uploads:rw
+    networks: [platform-net]
 
   mailpit:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    networks: [platform-net]
 
   connector:
     build:
@@ -143,7 +149,7 @@ services:
       LISTMONK_BASE_URL: http://listmonk:9000
       MAILPIT_BASE_URL: http://mailpit:8025
     ports:
-      - "${CONNECTOR_PORT:-4010}:${CONNECTOR_PORT:-4010}"
+      - "127.0.0.1:${CONNECTOR_PORT:-4010}:${CONNECTOR_PORT:-4010}"
     depends_on:
       twenty-server:
         condition: service_healthy
@@ -151,8 +157,24 @@ services:
         condition: service_healthy
       listmonk:
         condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.PORT||4010)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [platform-net]
 
 volumes:
   twenty-db-data:
   twenty-server-local-data:
   listmonk-db-data:
+
+networks:
+  platform-net:
+    name: ${PROJECT_NAME:-crm_mailer_local}_net

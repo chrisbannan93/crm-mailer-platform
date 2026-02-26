@@ -1,0 +1,23 @@
+{
+  "name": "mortgage_au",
+  "version": 1,
+  "defaultList": {
+    "name": "Mortgage AU Leads",
+    "type": "private",
+    "optin": "single",
+    "tags": ["crm", "mortgage_au", "placeholder"],
+    "description": "Placeholder list for AU mortgage broking contacts"
+  },
+  "subscriberAttribs": {
+    "includeTwentyPersonId": true,
+    "static": {
+      "vertical": "mortgage_au",
+      "country": "AU",
+      "compliancePlaceholder": true
+    }
+  },
+  "notes": [
+    "Placeholder only. Keep all mortgage-specific logic in this folder.",
+    "TODO: broker stages, compliance tags, consent model."
+  ]
+}

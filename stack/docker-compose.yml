@@ -139,7 +139,7 @@ services:
     environment:
       PORT: ${CONNECTOR_PORT:-4010}
       VERTICAL: ${VERTICAL:-generic}
-      TWENTY_BASE_URL: ${TWENTY_SERVER_URL:-http://twenty-server:3000}
+      TWENTY_BASE_URL: http://twenty-server:3000
       LISTMONK_BASE_URL: http://listmonk:9000
       MAILPIT_BASE_URL: http://mailpit:8025
     ports:

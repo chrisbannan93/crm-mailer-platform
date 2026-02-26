@@ -49,6 +49,25 @@ export class ConnectorService {
     return this.deps.listmonk.listLists();
   }
 
+  async syncLists(): Promise<Array<{ id: number; name: string }>> {
+    const list = await this.deps.listmonk.ensureList({
+      name: this.deps.vertical.defaultList.name,
+      type: this.deps.vertical.defaultList.type,
+      optin: this.deps.vertical.defaultList.optin,
+      tags: this.deps.vertical.defaultList.tags,
+      description: this.deps.vertical.defaultList.description,
+    });
+
+    this.deps.store.addEvent({
+      kind: 'sync',
+      status: 'ok',
+      message: `Ensured list ${list.name}`,
+      detail: { listId: list.id, source: 'sync-lists' },
+    });
+
+    return [list];
+  }
+
   async syncContact(contact: ContactRecord, source: string): Promise<SyncResult> {
     const list = await this.deps.listmonk.ensureList({
       name: this.deps.vertical.defaultList.name,
@@ -96,6 +115,16 @@ export class ConnectorService {
 
     await this.syncContact(contact, 'twenty-webhook');
     return { accepted: true, synced: true };
+  }
+
+  async handleListmonkWebhook(payload: Record<string, unknown>): Promise<{ accepted: true }> {
+    this.deps.store.addEvent({
+      kind: 'engagement',
+      status: 'ok',
+      message: 'Received listmonk webhook payload',
+      detail: { source: 'listmonk-webhook', payload },
+    });
+    return { accepted: true };
   }
 
   async syncPersonById(id: string): Promise<SyncResult> {

@@ -1,10 +1,10 @@
-import { getConfig } from './config.js';
-import { ListmonkClient } from './listmonk.js';
+import { getConfig } from './config/index.js';
+import { startOptionalJobs } from './jobs/index.js';
 import { MemoryStore } from './memory-store.js';
 import { createServer } from './server.js';
 import { ConnectorService } from './service.js';
-import { TwentyClient } from './twenty.js';
-import { loadVerticalPack } from './vertical.js';
+import { ListmonkClient, TwentyClient } from './clients/index.js';
+import { loadVerticalPack } from './services/verticalLoader.js';
 
 async function main() {
   const config = getConfig();
@@ -18,6 +18,7 @@ async function main() {
     listmonk: new ListmonkClient(config.listmonk),
   });
   const app = createServer(config, service);
+  startOptionalJobs();
 
   app.listen(config.port, () => {
     console.log(`connector listening on :${config.port} (vertical=${vertical.name})`);

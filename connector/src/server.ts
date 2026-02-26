@@ -1,9 +1,10 @@
 import express from 'express';
 import type { Request } from 'express';
 import type { AppConfig } from './config.js';
+import { registerHealthRoutes, registerSyncRoutes, registerWebhookRoutes } from './routes/index.js';
 import { ConnectorService } from './service.js';
 import { renderSidecarUi } from './ui.js';
-import { toTransparentGif, verifyTwentyWebhookSignature } from './utils.js';
+import { toTransparentGif } from './utils.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -28,9 +29,9 @@ export function createServer(config: AppConfig, service: ConnectorService) {
     }),
   );
 
-  app.get('/healthz', (_req, res) => {
-    res.json({ ok: true, service: 'connector', vertical: config.vertical });
-  });
+  registerHealthRoutes(app, config);
+  registerSyncRoutes(app, service);
+  registerWebhookRoutes(app, config, service);
 
   app.get('/', (_req, res) => {
     res.type('html').send(renderSidecarUi(config));
@@ -44,55 +45,6 @@ export function createServer(config: AppConfig, service: ConnectorService) {
   app.get('/lists', async (_req, res, next) => {
     try {
       res.json({ data: await service.listLists() });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post('/webhooks/twenty', async (req, res, next) => {
-    try {
-      const isValid = verifyTwentyWebhookSignature({
-        secret: config.twentyWebhookSecret,
-        rawBody: req.rawBody ?? JSON.stringify(req.body ?? {}),
-        signatureHeader: req.header('X-Twenty-Webhook-Signature') ?? undefined,
-        timestampHeader: req.header('X-Twenty-Webhook-Timestamp') ?? undefined,
-      });
-
-      if (!isValid) {
-        res.status(401).json({ error: 'Invalid Twenty webhook signature' });
-        return;
-      }
-
-      const result = await service.handleTwentyWebhook(req.body ?? {});
-      res.json({ ok: true, ...result });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post('/sync/contacts', async (req, res, next) => {
-    try {
-      const body = getBody(req);
-      const contacts = Array.isArray(body.contacts) ? body.contacts : [];
-      const results = [] as unknown[];
-      for (const item of contacts) {
-        const contact = item as { email?: string; crmId?: string; firstName?: string; lastName?: string; fullName?: string };
-        if (!contact.email) continue;
-        results.push(
-          await service.syncContact(
-            {
-              crmId: contact.crmId,
-              email: contact.email,
-              firstName: contact.firstName,
-              lastName: contact.lastName,
-              fullName: contact.fullName,
-              raw: item,
-            },
-            'manual-batch',
-          ),
-        );
-      }
-      res.json({ ok: true, count: results.length, data: results });
     } catch (error) {
       next(error);
     }

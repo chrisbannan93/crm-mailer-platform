@@ -1,0 +1,22 @@
+{
+  "name": "generic",
+  "version": 1,
+  "defaultList": {
+    "name": "CRM Synced Contacts",
+    "type": "private",
+    "optin": "single",
+    "tags": ["crm", "generic"],
+    "description": "Default list for contacts synced from Twenty CRM"
+  },
+  "subscriberAttribs": {
+    "includeTwentyPersonId": true,
+    "static": {
+      "vertical": "generic",
+      "sourceCrm": "twenty"
+    }
+  },
+  "notes": [
+    "Default industry-agnostic mapping.",
+    "Use this for shared core behavior."
+  ]
+}

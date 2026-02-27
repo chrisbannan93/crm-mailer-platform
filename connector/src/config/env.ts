@@ -35,10 +35,10 @@ const envSchema = z.object({
   TWENTY_REST_PATH: z.string().default('/rest'),
   TWENTY_WRITEBACK_MODE: z.enum(['log', 'rest_note', 'workflow_webhook']).default('log'),
   TWENTY_ENGAGEMENT_NOTE_ENDPOINT: z.string().default('/rest/notes'),
-  TWENTY_WORKFLOW_WEBHOOK_URL: urlString.optional(),
+  TWENTY_WORKFLOW_WEBHOOK_URL: z.string().optional(),
 
   MAILPIT_BASE_URL: urlString.optional(),
-  SYNC_INTERVAL_MINUTES: z.coerce.number().positive().optional(),
+  SYNC_INTERVAL_MINUTES: z.coerce.number().nonnegative().optional(),
   SYNC_MAX_CONTACTS_PER_RUN: z.coerce.number().int().positive().default(500),
   SYNC_STATE_FILE: z.string().default('./data/state.json'),
 });
@@ -87,6 +87,21 @@ export type AppConfig = {
 
 export function parseEnv(input: Record<string, string | undefined>): AppConfig {
   const parsed = envSchema.parse(input);
+  const normalizedWorkflowWebhookUrl = parsed.TWENTY_WORKFLOW_WEBHOOK_URL?.trim();
+  let workflowWebhookUrl: string | undefined;
+
+  if (normalizedWorkflowWebhookUrl) {
+    const parsedWebhookUrl = urlString.safeParse(normalizedWorkflowWebhookUrl);
+    if (parsedWebhookUrl.success) {
+      workflowWebhookUrl = parsedWebhookUrl.data;
+    } else if (parsed.TWENTY_WRITEBACK_MODE === 'workflow_webhook') {
+      throw parsedWebhookUrl.error;
+    }
+  }
+
+  if (parsed.TWENTY_WRITEBACK_MODE === 'workflow_webhook' && !workflowWebhookUrl) {
+    throw new Error('TWENTY_WORKFLOW_WEBHOOK_URL is required for workflow_webhook mode');
+  }
 
   return {
     port: parsed.PORT,
@@ -118,7 +133,7 @@ export function parseEnv(input: Record<string, string | undefined>): AppConfig {
       restPath: parsed.TWENTY_REST_PATH,
       writebackMode: parsed.TWENTY_WRITEBACK_MODE,
       engagementNoteEndpoint: parsed.TWENTY_ENGAGEMENT_NOTE_ENDPOINT,
-      workflowWebhookUrl: parsed.TWENTY_WORKFLOW_WEBHOOK_URL,
+      workflowWebhookUrl,
     },
     mailpitBaseUrl: parsed.MAILPIT_BASE_URL,
     sync: {

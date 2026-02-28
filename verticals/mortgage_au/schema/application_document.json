@@ -1,0 +1,16 @@
+{
+  "object": "Application Document",
+  "slug": "application_document",
+  "description": "Checklist item linked to a Loan Application.",
+  "fields": [
+    { "name": "applicationId", "type": "relation", "required": true, "target": "loan_application" },
+    { "name": "documentKey", "type": "text", "required": true },
+    { "name": "documentLabel", "type": "text", "required": true },
+    { "name": "required", "type": "boolean", "required": true },
+    { "name": "status", "type": "select", "required": true, "options": ["missing", "requested", "received", "accepted", "waived"] },
+    { "name": "ownerRole", "type": "select", "required": false, "options": ["broker", "admin"] },
+    { "name": "notes", "type": "long_text", "required": false },
+    { "name": "receivedAt", "type": "date", "required": false },
+    { "name": "validatedAt", "type": "date", "required": false }
+  ]
+}

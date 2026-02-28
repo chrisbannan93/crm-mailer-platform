@@ -30,11 +30,14 @@ describe('server', () => {
   it('serves health endpoint', async () => {
     const service = {
       getRecentEvents: vi.fn().mockReturnValue([]),
+      listEmailTemplates: vi.fn().mockReturnValue([]),
+      renderEmailTemplate: vi.fn(),
       listLists: vi.fn().mockResolvedValue([]),
       handleTwentyWebhook: vi.fn(),
       syncContactsFromTwenty: vi.fn().mockResolvedValue({ ok: true, fetched: 0, processed: 0, skippedNoEmail: 0, maxReached: false }),
       syncPersonById: vi.fn(),
       sendTestCampaign: vi.fn(),
+      sendTemplateCampaign: vi.fn(),
       recordEngagement: vi.fn(),
     } as any;
 
@@ -48,12 +51,15 @@ describe('server', () => {
   it('rejects listmonk webhook when shared header token is invalid', async () => {
     const service = {
       getRecentEvents: vi.fn().mockReturnValue([]),
+      listEmailTemplates: vi.fn().mockReturnValue([]),
+      renderEmailTemplate: vi.fn(),
       listLists: vi.fn().mockResolvedValue([]),
       handleTwentyWebhook: vi.fn(),
       handleListmonkWebhook: vi.fn(),
       syncContactsFromTwenty: vi.fn().mockResolvedValue({ ok: true, fetched: 0, processed: 0, skippedNoEmail: 0, maxReached: false }),
       syncPersonById: vi.fn(),
       sendTestCampaign: vi.fn(),
+      sendTemplateCampaign: vi.fn(),
       recordEngagement: vi.fn(),
     } as any;
 

@@ -185,6 +185,43 @@ export function renderSidecarUi(config: AppConfig): string {
       </section>
 
       <section class="panel col-8">
+        <h2>Template Studio</h2>
+        <div class="metric"><span class="k">Active vertical</span><span class="v mono">${config.vertical}</span></div>
+        <label class="small" for="templateSelect">Email template</label>
+        <select id="templateSelect" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;">
+          <option value="">Loading templates…</option>
+        </select>
+        <div class="grid" style="margin-top:10px;">
+          <div class="col-6">
+            <label class="small" for="templateRecipient">Recipient email</label>
+            <input id="templateRecipient" type="email" placeholder="borrower@example.com" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;" />
+          </div>
+          <div class="col-6">
+            <label class="small" for="templatePersonId">Person ID (optional)</label>
+            <input id="templatePersonId" type="text" placeholder="Twenty person id" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;" />
+          </div>
+        </div>
+        <label class="small" for="templateContext" style="display:block; margin-top:10px;">Application context JSON</label>
+        <textarea id="templateContext" style="width:100%; min-height:180px; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;">{
+  "contact": { "firstName": "Chris" },
+  "broker": { "name": "Broker Name", "signature": "Broker Name" },
+  "application": {
+    "applicationId": "APP-001",
+    "applicationType": "retail_home_loan",
+    "pipelineStage": "docs_requested",
+    "lenderTarget": "Example Lender",
+    "entityName": "Example Pty Ltd"
+  },
+  "checklist": { "requiredSummary": "ID, bank statements, privacy consent" }
+}</textarea>
+        <div class="btnRow">
+          <button id="previewTemplateBtn" class="ghost">Preview Template</button>
+          <button id="sendTemplateBtn" class="secondary">Send Template Test</button>
+        </div>
+        <p class="small" style="margin-top:10px;">Templates are loaded from the active vertical folder and rendered against the provided context.</p>
+      </section>
+
+      <section class="panel col-8">
         <h2>Recent Engagement Events</h2>
         <div class="btnRow" style="margin-top:0; margin-bottom:10px;">
           <button id="refreshEngagementBtn" class="ghost">Refresh Engagement Events</button>
@@ -212,6 +249,8 @@ export function renderSidecarUi(config: AppConfig): string {
       $('refreshStatusBtn').disabled = v;
       $('refreshEngagementBtn').disabled = v;
       $('refreshAllBtn').disabled = v;
+      $('previewTemplateBtn').disabled = v;
+      $('sendTemplateBtn').disabled = v;
     }
 
     function writeLog(value) {
@@ -295,6 +334,23 @@ export function renderSidecarUi(config: AppConfig): string {
       writeLog(data);
     }
 
+    async function refreshTemplates() {
+      const data = await api('/templates/email');
+      const select = $('templateSelect');
+      const items = Array.isArray(data.data) ? data.data : [];
+      select.innerHTML = '';
+      if (items.length === 0) {
+        select.innerHTML = '<option value="">No templates loaded</option>';
+        return;
+      }
+      for (const item of items) {
+        const option = document.createElement('option');
+        option.value = item.key;
+        option.textContent = item.name + (item.trigger ? ' · ' + item.trigger : '');
+        select.appendChild(option);
+      }
+    }
+
     async function runContactSync() {
       const rawMax = $('contactSyncMax').value.trim();
       const max = rawMax ? Math.min(Math.max(Number(rawMax), 1), 500) : null;
@@ -304,6 +360,33 @@ export function renderSidecarUi(config: AppConfig): string {
 
     async function runListSync() {
       return api('/sync/lists', { method: 'POST' });
+    }
+
+    function readTemplateContext() {
+      const raw = $('templateContext').value.trim();
+      return raw ? JSON.parse(raw) : {};
+    }
+
+    async function previewTemplate() {
+      return api('/templates/email/render', {
+        method: 'POST',
+        body: JSON.stringify({
+          templateKey: $('templateSelect').value,
+          context: readTemplateContext(),
+        }),
+      });
+    }
+
+    async function sendTemplate() {
+      return api('/campaigns/send-template', {
+        method: 'POST',
+        body: JSON.stringify({
+          templateKey: $('templateSelect').value,
+          to: $('templateRecipient').value.trim(),
+          personId: $('templatePersonId').value.trim() || undefined,
+          context: readTemplateContext(),
+        }),
+      });
     }
 
     async function wrapAction(label, fn) {
@@ -325,10 +408,13 @@ export function renderSidecarUi(config: AppConfig): string {
     $('listSyncBtn').onclick = () => wrapAction('list-sync', runListSync);
     $('refreshEngagementBtn').onclick = () => wrapAction('refresh-engagement-events', refreshEngagementEvents);
     $('refreshAllBtn').onclick = () => wrapAction('refresh-all-events', refreshAllEventsToLog);
+    $('previewTemplateBtn').onclick = () => wrapAction('preview-template', previewTemplate);
+    $('sendTemplateBtn').onclick = () => wrapAction('send-template', sendTemplate);
 
     (async () => {
       try {
         await refreshStatus();
+        await refreshTemplates();
         await refreshEngagementEvents();
       } catch (err) {
         writeLog(err && err.message ? err.message : String(err));

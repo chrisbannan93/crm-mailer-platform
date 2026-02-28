@@ -6,17 +6,20 @@ import { createServer } from './server.js';
 import { ConnectorService } from './service.js';
 import { ListmonkClient, TwentyClient } from './clients/index.js';
 import { loadSegmentDefinitions, loadVerticalPack } from './services/verticalLoader.js';
+import { loadEmailTemplates } from './services/templateLoader.js';
 
 async function main() {
   const config = getConfig();
   const vertical = await loadVerticalPack(config.vertical);
   const segments = await loadSegmentDefinitions(config.vertical);
+  const emailTemplates = await loadEmailTemplates(config.vertical);
   const store = new MemoryStore(200, config.sync.stateFile);
   const service = new ConnectorService({
     config,
     store,
     vertical,
     segments,
+    emailTemplates,
     twenty: new TwentyClient(config.twenty),
     listmonk: new ListmonkClient(config.listmonk),
     logger,

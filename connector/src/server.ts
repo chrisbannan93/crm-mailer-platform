@@ -80,6 +80,28 @@ export function createServer(config: AppConfig, service: ConnectorService) {
     }
   });
 
+  app.get('/templates/email', (_req, res) => {
+    res.json({ data: service.listEmailTemplates() });
+  });
+
+  app.post('/templates/email/render', (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const templateKey = String(body.templateKey ?? '').trim();
+      if (!templateKey) {
+        res.status(400).json({ error: 'Missing `templateKey`' });
+        return;
+      }
+      const context =
+        typeof body.context === 'object' && body.context
+          ? (body.context as Record<string, unknown>)
+          : {};
+      res.json({ ok: true, data: service.renderEmailTemplate({ templateKey, context }) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/sync/person/:id', async (req, res, next) => {
     try {
       const result = await service.syncPersonById(req.params.id);
@@ -113,6 +135,31 @@ export function createServer(config: AppConfig, service: ConnectorService) {
     }
   });
 
+  app.post('/campaigns/send-template', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const to = String(body.to ?? '').trim();
+      const templateKey = String(body.templateKey ?? '').trim();
+      if (!to || !templateKey) {
+        res.status(400).json({ error: 'Missing `to` or `templateKey`' });
+        return;
+      }
+      const context =
+        typeof body.context === 'object' && body.context
+          ? (body.context as Record<string, unknown>)
+          : {};
+      const result = await service.sendTemplateCampaign({
+        templateKey,
+        to,
+        personId: typeof body.personId === 'string' ? body.personId : undefined,
+        context,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/track/open.gif', async (req, res, next) => {
     try {
       await service.recordEngagement({
@@ -121,6 +168,10 @@ export function createServer(config: AppConfig, service: ConnectorService) {
         email: typeof req.query.email === 'string' ? req.query.email : undefined,
         campaignId: typeof req.query.campaignId === 'string' ? req.query.campaignId : undefined,
         source: 'tracking-pixel',
+        metadata:
+          typeof req.query.applicationId === 'string'
+            ? { applicationId: req.query.applicationId }
+            : undefined,
       });
       res.setHeader('Content-Type', 'image/gif');
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -145,6 +196,10 @@ export function createServer(config: AppConfig, service: ConnectorService) {
         campaignId: typeof req.query.campaignId === 'string' ? req.query.campaignId : undefined,
         source: 'tracking-click',
         targetUrl,
+        metadata:
+          typeof req.query.applicationId === 'string'
+            ? { applicationId: req.query.applicationId }
+            : undefined,
       });
 
       res.redirect(302, targetUrl);

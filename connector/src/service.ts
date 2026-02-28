@@ -5,7 +5,9 @@ import type {
   ContactRecord,
   ContactsSyncCursor,
   ContactsSyncRunResult,
+  EmailTemplateDefinition,
   EngagementEvent,
+  RenderedEmailTemplate,
   SegmentDefinition,
   SyncResult,
   TwentyWebhookPayload,
@@ -13,6 +15,7 @@ import type {
 } from './types.js';
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
 import { buildSubscriberAttribs } from './vertical.js';
+import { renderEmailTemplate as renderTemplate } from './services/templateRenderer.js';
 
 function buildSafeCampaignName(input?: string): string {
   const fallback = `CRM Test ${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}`;
@@ -27,6 +30,7 @@ export type ConnectorDeps = {
   store: MemoryStore;
   vertical: VerticalPack;
   segments?: SegmentDefinition[];
+  emailTemplates?: EmailTemplateDefinition[];
   twenty: {
     listContacts(updatedSince?: string, pageCursor?: string): Promise<{ contacts: Array<Record<string, unknown>>; nextCursor?: string }>;
     getContactByEmail?(email: string): Promise<Record<string, unknown> | null>;
@@ -83,6 +87,23 @@ export class ConnectorService {
   private contactsSyncInProgress = false;
 
   constructor(private readonly deps: ConnectorDeps) {}
+
+  listEmailTemplates() {
+    return (this.deps.emailTemplates ?? []).map((template) => ({
+      key: template.key,
+      name: template.name,
+      audience: template.audience,
+      trigger: template.trigger,
+    }));
+  }
+
+  renderEmailTemplate(input: {
+    templateKey: string;
+    context?: Record<string, unknown>;
+  }): RenderedEmailTemplate {
+    const template = this.requireEmailTemplate(input.templateKey);
+    return renderTemplate(template, input.context ?? {});
+  }
 
   getRecentEvents(limit = 50) {
     return this.deps.store.listEvents(limit);
@@ -507,20 +528,15 @@ export class ConnectorService {
     bodyHtml?: string;
     personId?: string;
     campaignName?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<{ campaignId: number; testRecipient: string }> {
     const list = await this.bootstrapDefaultList();
-
-    const trackingBase = this.deps.config.publicTrackingBaseUrl;
-    const openUrl = new URL('/track/open.gif', trackingBase);
-    openUrl.searchParams.set('email', input.to);
-    if (input.personId) openUrl.searchParams.set('personId', input.personId);
-
-    const clickUrl = new URL('/track/click', trackingBase);
-    clickUrl.searchParams.set('url', 'https://example.com');
-    clickUrl.searchParams.set('email', input.to);
-    if (input.personId) clickUrl.searchParams.set('personId', input.personId);
-
-    const html = input.bodyHtml ?? `<p>Hello from CRM + listmonk connector.</p><p><a href="${clickUrl.toString()}">Tracked link</a></p><img src="${openUrl.toString()}" alt="" width="1" height="1" />`;
+    const html = this.buildTrackedEmailBody({
+      to: input.to,
+      personId: input.personId,
+      bodyHtml: input.bodyHtml,
+      metadata: input.metadata,
+    });
 
     const campaignName = buildSafeCampaignName(input.campaignName);
 
@@ -551,6 +567,35 @@ export class ConnectorService {
     return { campaignId: campaign.id, testRecipient: input.to };
   }
 
+  async sendTemplateCampaign(input: {
+    templateKey: string;
+    to: string;
+    personId?: string;
+    context?: Record<string, unknown>;
+  }): Promise<{ campaignId: number; testRecipient: string; templateKey: string }> {
+    const rendered = this.renderEmailTemplate({
+      templateKey: input.templateKey,
+      context: input.context,
+    });
+    const application = (input.context?.application as Record<string, unknown> | undefined) ?? {};
+    const metadata = {
+      applicationId: getString(application.applicationId) ?? getString(application.id),
+      applicationType: getString(application.applicationType),
+      pipelineStage: getString(application.pipelineStage),
+    };
+
+    const result = await this.sendTestCampaign({
+      to: input.to,
+      subject: rendered.subject,
+      bodyHtml: rendered.bodyHtml,
+      personId: input.personId,
+      campaignName: rendered.name,
+      metadata,
+    });
+
+    return { ...result, templateKey: input.templateKey };
+  }
+
   async recordEngagement(event: Omit<EngagementEvent, 'timestamp'> & { timestamp?: string }) {
     const full: EngagementEvent = { ...event, timestamp: event.timestamp ?? nowIso() };
 
@@ -569,6 +614,7 @@ export class ConnectorService {
           targetUrl: full.targetUrl,
           crmActivityType: full.crmActivityType,
           source: full.source,
+          metadata: full.metadata,
         },
       });
       return { ok: true };
@@ -581,6 +627,44 @@ export class ConnectorService {
       });
       throw error;
     }
+  }
+
+  private requireEmailTemplate(templateKey: string): EmailTemplateDefinition {
+    const template = (this.deps.emailTemplates ?? []).find((entry) => entry.key === templateKey);
+    if (!template) {
+      throw new Error(`Unknown email template '${templateKey}'`);
+    }
+    return template;
+  }
+
+  private buildTrackedEmailBody(input: {
+    to: string;
+    personId?: string;
+    bodyHtml?: string;
+    metadata?: Record<string, unknown>;
+  }): string {
+    const trackingBase = this.deps.config.publicTrackingBaseUrl;
+    const openUrl = new URL('/track/open.gif', trackingBase);
+    const clickUrl = new URL('/track/click', trackingBase);
+
+    openUrl.searchParams.set('email', input.to);
+    clickUrl.searchParams.set('url', 'https://example.com');
+    clickUrl.searchParams.set('email', input.to);
+    if (input.personId) {
+      openUrl.searchParams.set('personId', input.personId);
+      clickUrl.searchParams.set('personId', input.personId);
+    }
+    for (const [key, value] of Object.entries(input.metadata ?? {})) {
+      if (value === undefined || value === null || value === '') continue;
+      openUrl.searchParams.set(key, String(value));
+      clickUrl.searchParams.set(key, String(value));
+    }
+
+    const baseHtml =
+      input.bodyHtml ??
+      `<p>Hello from CRM + listmonk connector.</p><p><a href="${clickUrl.toString()}">Tracked link</a></p>`;
+
+    return `${baseHtml}<img src="${openUrl.toString()}" alt=\"\" width=\"1\" height=\"1\" />`;
   }
 }
 

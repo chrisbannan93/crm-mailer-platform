@@ -34,3 +34,9 @@
 - Impact: <what changes>
 - Supersedes: <optional>
 ```
+
+### 2026-02-28 - Add generic vertical email-template loading and Mailer Studio template actions
+- Status: Accepted
+- Why: Future verticals need a shared way to render and send vertical-owned listmonk templates without embedding business logic in connector core.
+- Alternatives: Keep templates as docs-only assets, or hardcode mortgage templates into the connector UI.
+- Impact: Core connector now loads `verticals/<VERTICAL>/templates/email/*.json`, renders them with merge context, and exposes generic preview/send endpoints used by Mailer Studio.

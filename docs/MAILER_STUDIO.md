@@ -10,6 +10,7 @@ What you get:
   - last contact sync time
   - last list sync time
   - buttons to run contact sync / list sync
+  - template preview/send for active vertical email templates
   - link to open listmonk UI
   - recent engagement events feed
 
@@ -49,6 +50,12 @@ The UI calls `GET /studio/status` and shows:
 - `Run Contact Sync` -> `POST /sync/contacts`
 - `Run List Sync` -> `POST /sync/lists`
 
+### Template Studio
+- `GET /templates/email` lists template metadata for the active vertical
+- `POST /templates/email/render` renders a chosen template using supplied JSON context
+- `POST /campaigns/send-template` creates a listmonk test draft/send using the rendered template
+- when `application.applicationId` is present in the context, tracking URLs carry it through as engagement metadata
+
 ### Recent engagement events
 The UI reads:
 - `GET /events/recent?kind=engagement&limit=20`
@@ -60,9 +67,11 @@ This environment does not auto-capture screenshots in docs. To capture screensho
 2. Open `http://localhost:4010/` (or open via Twenty nav item).
 3. Ensure connection status is green for Twenty and listmonk.
 4. Run `Run Contact Sync` and `Run List Sync`.
-5. Trigger or simulate an engagement event (see `docs/WEBHOOKS.md`).
-6. Capture screenshots:
+5. Use Template Studio to preview or send a vertical-owned email template.
+6. Trigger or simulate an engagement event (see `docs/WEBHOOKS.md`).
+7. Capture screenshots:
    - Mailer Studio home view (status + buttons)
+   - Template Studio with a rendered mortgage template
    - Recent engagement events populated
    - listmonk UI list page (optional)
    - Twenty page showing navigation item (if nav app installed)

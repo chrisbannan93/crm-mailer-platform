@@ -105,3 +105,21 @@ export type SegmentsConfig = {
   version: number;
   segments: SegmentDefinition[];
 };
+
+export type EmailTemplateDefinition = {
+  key: string;
+  name: string;
+  audience?: string;
+  trigger?: string;
+  subject: string;
+  bodyHtml: string;
+  bodyText?: string;
+};
+
+export type RenderedEmailTemplate = {
+  key: string;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  bodyText?: string;
+};

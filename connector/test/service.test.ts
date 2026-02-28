@@ -319,4 +319,68 @@ describe('ConnectorService', () => {
       }),
     );
   });
+
+  it('renders and sends a vertical email template with application metadata', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 10 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
+      createCampaign: vi.fn().mockResolvedValue({ id: 88 }),
+      sendCampaignTest: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new ConnectorService({
+      config: makeConfig(),
+      store: new MemoryStore(),
+      vertical,
+      emailTemplates: [
+        {
+          key: 'retail_documents_request',
+          name: 'Retail documents request',
+          subject: 'Docs needed for {{application.applicationId}}',
+          bodyHtml: '<p>Hello {{contact.firstName}}</p>',
+        },
+      ],
+      twenty: { listContacts: vi.fn(), fetchPersonById: vi.fn(), writeEngagement: vi.fn() },
+      // @ts-expect-error partial mock for this test
+      listmonk,
+    });
+
+    const preview = service.renderEmailTemplate({
+      templateKey: 'retail_documents_request',
+      context: {
+        contact: { firstName: 'Chris' },
+        application: { applicationId: 'APP-123', applicationType: 'retail_home_loan', pipelineStage: 'docs_requested' },
+      },
+    });
+
+    expect(preview.subject).toBe('Docs needed for APP-123');
+
+    const sent = await service.sendTemplateCampaign({
+      templateKey: 'retail_documents_request',
+      to: 'proof@example.com',
+      personId: 'person_1',
+      context: {
+        contact: { firstName: 'Chris' },
+        application: { applicationId: 'APP-123', applicationType: 'retail_home_loan', pipelineStage: 'docs_requested' },
+      },
+    });
+
+    expect(sent.templateKey).toBe('retail_documents_request');
+    expect(listmonk.createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Retail documents request',
+        subject: 'Docs needed for APP-123',
+      }),
+    );
+    expect(listmonk.sendCampaignTest).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({
+        subscribers: ['proof@example.com'],
+      }),
+    );
+  });
 });

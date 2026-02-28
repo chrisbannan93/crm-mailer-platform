@@ -126,6 +126,46 @@ Expected behavior:
 - Twenty nav integration (official apps alpha): `twenty-apps/mailer-studio-nav/`
 - docs: `docs/MAILER_STUDIO.md`
 
+### Vertical email templates
+Mailer Studio now exposes generic template operations backed by `verticals/<VERTICAL>/templates/email/*.json`.
+
+List templates:
+```bash
+curl http://localhost:4010/templates/email
+```
+
+Render a template with application context:
+```bash
+curl -X POST http://localhost:4010/templates/email/render \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "templateKey":"retail_documents_request",
+    "context":{
+      "contact":{"firstName":"Chris"},
+      "broker":{"name":"Broker Name","signature":"Broker Name"},
+      "application":{"applicationId":"APP-001","applicationType":"retail_home_loan","pipelineStage":"docs_requested","lenderTarget":"Example Lender"},
+      "checklist":{"requiredSummary":"ID, bank statements, privacy consent"}
+    }
+  }'
+```
+
+Send a template test via listmonk:
+```bash
+curl -X POST http://localhost:4010/campaigns/send-template \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "templateKey":"retail_documents_request",
+    "to":"proof@example.com",
+    "personId":"<twenty-person-id>",
+    "context":{
+      "contact":{"firstName":"Chris"},
+      "broker":{"name":"Broker Name","signature":"Broker Name"},
+      "application":{"applicationId":"APP-001","applicationType":"retail_home_loan","pipelineStage":"docs_requested","lenderTarget":"Example Lender"},
+      "checklist":{"requiredSummary":"ID, bank statements, privacy consent"}
+    }
+  }'
+```
+
 ## Troubleshooting
 
 ### `make up` fails because env files are missing

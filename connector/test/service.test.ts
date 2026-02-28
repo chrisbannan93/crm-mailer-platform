@@ -248,4 +248,38 @@ describe('ConnectorService', () => {
       }),
     );
   });
+
+  it('uses a safe bounded campaign name for test sends', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 10 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
+      createCampaign: vi.fn().mockResolvedValue({ id: 77 }),
+      sendCampaignTest: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new ConnectorService({
+      config: makeConfig(),
+      store: new MemoryStore(),
+      vertical,
+      twenty: { listContacts: vi.fn(), fetchPersonById: vi.fn(), writeEngagement: vi.fn() },
+      // @ts-expect-error partial mock for this test
+      listmonk,
+    });
+
+    await service.sendTestCampaign({
+      to: 'proof@example.com',
+      subject: 'Connector proof',
+      campaignName: 'Connector Test 2026-02-28T06:55:38.742Z',
+    });
+
+    expect(listmonk.createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Connector Test 2026-02-28T065538742Z',
+      }),
+    );
+  });
 });

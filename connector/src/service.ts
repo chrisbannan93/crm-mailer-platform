@@ -14,6 +14,14 @@ import type {
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
 import { buildSubscriberAttribs } from './vertical.js';
 
+function buildSafeCampaignName(input?: string): string {
+  const fallback = `CRM Test ${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}`;
+  const raw = (input ?? fallback).trim();
+  const normalized = raw.replace(/\s+/g, ' ').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
+  const candidate = (normalized || fallback).slice(0, 48).trim();
+  return candidate.length >= 3 ? candidate : fallback;
+}
+
 export type ConnectorDeps = {
   config: AppConfig;
   store: MemoryStore;
@@ -504,7 +512,7 @@ export class ConnectorService {
     const html = input.bodyHtml ?? `<p>Hello from CRM + listmonk connector.</p><p><a href="${clickUrl.toString()}">Tracked link</a></p><img src="${openUrl.toString()}" alt="" width="1" height="1" />`;
 
     const campaign = await this.deps.listmonk.createCampaign({
-      name: input.campaignName ?? `Connector Test ${new Date().toISOString()}`,
+      name: buildSafeCampaignName(input.campaignName),
       subject: input.subject,
       listIds: [list.id],
       body: html,

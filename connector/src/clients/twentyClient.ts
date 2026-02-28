@@ -98,10 +98,17 @@ export class TwentyClient {
       return;
     }
 
-    await this.request(this.config.engagementNoteEndpoint, {
+    const note = await this.request<{ id?: string; createNote?: { id?: string } }>(this.config.engagementNoteEndpoint, {
       method: 'POST',
       body: this.buildRestNotePayload(event),
     });
+
+    const noteId = note.id ?? note.createNote?.id;
+    if (!noteId) {
+      throw new Error('Twenty note creation did not return an id');
+    }
+
+    await this.attachNoteTargets(noteId, event);
   }
 
   private buildRestNotePayload(event: EngagementEvent): Record<string, unknown> {
@@ -113,27 +120,54 @@ export class TwentyClient {
           : event.type === 'bounce'
             ? `Email bounce recorded${event.metadata?.reason ? `: ${String(event.metadata.reason)}` : ''}`
             : event.type === 'unsubscribe'
-              ? 'Email unsubscribe recorded'
+          ? 'Email unsubscribe recorded'
               : 'Email engagement recorded';
 
-    return {
-      title: 'Email engagement',
-      body: `${summary} (${event.timestamp})`,
-      content: `${summary} (${event.timestamp})`,
-      source: 'listmonk-connector',
+    const metadataLines = Object.entries({
       personId: event.personId,
       email: event.email,
       campaignId: event.campaignId,
       campaignName: event.campaignName,
       crmActivityType: event.crmActivityType,
-      metadata: {
-        type: event.type,
-        crmActivityType: event.crmActivityType,
-        source: event.source,
-        ...(event.metadata ?? {}),
-        ...(event.targetUrl ? { targetUrl: event.targetUrl } : {}),
+      source: event.source,
+      ...(event.metadata ?? {}),
+      ...(event.targetUrl ? { targetUrl: event.targetUrl } : {}),
+    })
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `- ${key}: ${String(value)}`);
+
+    const bodyText = [`${summary} (${event.timestamp})`, '', ...metadataLines].join('\n');
+
+    return {
+      title: 'Email engagement',
+      bodyV2: {
+        markdown: bodyText,
+        blocknote: JSON.stringify([
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: bodyText }],
+          },
+        ]),
       },
     };
+  }
+
+  private async attachNoteTargets(noteId: string, event: EngagementEvent): Promise<void> {
+    const targetPayloads: Record<string, unknown>[] = [];
+
+    if (event.personId) {
+      targetPayloads.push({
+        noteId,
+        targetPersonId: event.personId,
+      });
+    }
+
+    if (targetPayloads.length === 0) return;
+
+    await this.request(`${this.config.restPath}/noteTargets`, {
+      method: 'POST',
+      body: targetPayloads.length === 1 ? targetPayloads[0] : targetPayloads,
+    });
   }
 
   private async request<T = unknown>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {

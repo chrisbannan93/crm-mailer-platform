@@ -46,3 +46,9 @@
 - Why: The current repo has a working connector/template path but not a verified Twenty Apps custom-object install flow for local automation.
 - Alternatives: Block the MVP on Twenty Apps alpha tooling, or move mortgage applications out of Twenty and into the connector UI.
 - Impact: Loan Application and Application Document records are documented as manual Twenty setup for v0.2, while mortgage logic and assets remain isolated in the vertical folder.
+
+### 2026-02-28 - Make `rest_note` writeback create valid Twenty notes plus note targets
+- Status: Accepted
+- Why: Twenty's Notes API accepts `bodyV2`, not legacy `body` or `content`, and CRM-visible engagement logs need to appear on the linked Person timeline without depending on a manually configured workflow.
+- Alternatives: Keep workflow-webhook-only writeback, or write connector-only events without creating CRM artifacts.
+- Impact: Generic `rest_note` mode now creates a valid Note payload and links it to the Person via `NoteTarget`, which benefits every future vertical.

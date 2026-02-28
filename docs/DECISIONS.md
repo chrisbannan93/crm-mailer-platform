@@ -52,3 +52,9 @@
 - Why: Twenty's Notes API accepts `bodyV2`, not legacy `body` or `content`, and CRM-visible engagement logs need to appear on the linked Person timeline without depending on a manually configured workflow.
 - Alternatives: Keep workflow-webhook-only writeback, or write connector-only events without creating CRM artifacts.
 - Impact: Generic `rest_note` mode now creates a valid Note payload and links it to the Person via `NoteTarget`, which benefits every future vertical.
+
+### 2026-02-28 - Add optional `TWENTY_NODE_ENV` to the local stack
+- Status: Accepted
+- Why: Twenty Apps install/sync endpoints are gated behind `NODE_ENV=development|test`, and local platform work should be able to enable that mode without patching the repo each time.
+- Alternatives: Maintain a separate contributor checkout of Twenty, or keep manual custom-object setup as the only supported local path.
+- Impact: The Dockerized local stack still defaults to production behavior, but developers can opt into Twenty app-development endpoints by setting `TWENTY_NODE_ENV=development` in local stack env.

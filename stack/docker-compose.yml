@@ -7,6 +7,7 @@ services:
     ports:
       - "127.0.0.1:${TWENTY_PORT:-3000}:3000"
     environment:
+      NODE_ENV: ${TWENTY_NODE_ENV:-production}
       NODE_PORT: 3000
       SERVER_URL: ${TWENTY_SERVER_URL:-http://localhost:3000}
       PG_DATABASE_URL: postgres://${TWENTY_PG_USER:-postgres}:${TWENTY_PG_PASSWORD:-postgres}@twenty-db:5432/${TWENTY_PG_DB:-default}
@@ -32,6 +33,7 @@ services:
     restart: unless-stopped
     command: ["yarn", "worker:prod"]
     environment:
+      NODE_ENV: ${TWENTY_NODE_ENV:-production}
       SERVER_URL: ${TWENTY_SERVER_URL:-http://localhost:3000}
       PG_DATABASE_URL: postgres://${TWENTY_PG_USER:-postgres}:${TWENTY_PG_PASSWORD:-postgres}@twenty-db:5432/${TWENTY_PG_DB:-default}
       REDIS_URL: redis://twenty-redis:6379

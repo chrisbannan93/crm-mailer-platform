@@ -192,6 +192,27 @@ Check:
 - API path settings (`TWENTY_REST_PATH`)
 - Connector logs for response status and error details
 
+### CRM-visible writeback for local MVP
+Recommended setting in `connector/.env`:
+```bash
+TWENTY_WRITEBACK_MODE=rest_note
+```
+
+Why:
+- writes a real Twenty Note for each engagement
+- links that note to the target Person through `NoteTarget`
+- avoids depending on a manually configured Twenty workflow
+
+Verify:
+```bash
+curl 'http://localhost:4010/track/open.gif?email=test@example.com&personId=<twenty-person-id>&applicationId=APP-001' >/dev/null
+TOKEN=$(awk -F= '/^TWENTY_API_KEY=/{print substr($0,index($0,"=")+1)}' connector/.env)
+curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://localhost:3000/rest/notes | jq .
+curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://localhost:3000/rest/noteTargets | jq .
+```
+
+`workflow_webhook` is still supported, but it is only reliable when the target workflow inside Twenty is configured correctly.
+
 ### listmonk sync fails or lists are not created
 Check:
 - `LISTMONK_BASE_URL` in `connector/.env`
@@ -254,7 +275,7 @@ make up
 - After upgrade, validate:
   - `GET /studio/status`
   - contact sync (`/sync/contacts`)
-  - engagement writeback mode (`workflow_webhook` preferred for resilience)
+  - engagement writeback mode (`rest_note` is the simplest reliable local default)
 
 ### listmonk upgrades
 - listmonk runs `--install --idempotent` and `--upgrade --yes` on startup in this stack.

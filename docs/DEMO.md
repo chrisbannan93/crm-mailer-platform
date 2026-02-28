@@ -6,7 +6,9 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 ## Preconditions
 - stack is running
 - `VERTICAL=mortgage_au` in `stack/.env`
-- connector restarted after changing vertical
+- `VERTICAL=mortgage_au` in `connector/.env` when running connector locally
+- `TWENTY_WRITEBACK_MODE=rest_note` in `connector/.env`
+- connector restarted after changing vertical or writeback mode
 - Twenty reachable at `http://localhost:3000`
 - listmonk reachable at `http://localhost:9000`
 - Mailer Studio reachable at `http://localhost:4010`
@@ -91,7 +93,8 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 2. Load the message body so the tracking pixel fires.
 3. Return to Mailer Studio and refresh engagement events.
 4. Confirm a new `engagement` event appears.
-5. If `TWENTY_WRITEBACK_MODE=workflow_webhook`, verify the workflow target in Twenty received the payload / created a CRM-visible log.
+5. Open Twenty and confirm a new `Email engagement` note exists.
+6. Confirm the note body includes `applicationId: APP-001`.
 
 ## Curl commands
 ### Health
@@ -148,7 +151,15 @@ curl -X POST http://localhost:4010/campaigns/send-template \
 curl 'http://localhost:4010/events/recent?limit=20'
 ```
 
+### CRM-visible note proof
+```bash
+TOKEN=$(awk -F= '/^TWENTY_API_KEY=/{print substr($0,index($0,"=")+1)}' connector/.env)
+curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://localhost:3000/rest/notes | jq .
+curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://localhost:3000/rest/noteTargets | jq .
+```
+
 ## Talking points
 - Mortgage-specific assets remain isolated under `verticals/mortgage_au/`.
 - The connector core only gained a generic template loader/render/send path that future verticals can reuse.
 - The current MVP still relies on manual Twenty custom-object setup because the Twenty Apps custom-object install path is alpha and not yet wired into this repo.
+- The stable local CRM writeback path for MVP is `rest_note`; `workflow_webhook` remains available but depends on correct workflow configuration inside Twenty.

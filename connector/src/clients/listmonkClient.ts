@@ -175,10 +175,32 @@ export class ListmonkClient {
     });
   }
 
-  async sendCampaignTest(campaignId: number, subscribers: string[]): Promise<void> {
+  async sendCampaignTest(
+    campaignId: number,
+    input: {
+      subscribers: string[];
+      name: string;
+      subject: string;
+      listIds: number[];
+      body: string;
+      fromEmail?: string;
+      tags?: string[];
+    },
+  ): Promise<void> {
     await this.request(`/api/campaigns/${campaignId}/test`, {
       method: 'POST',
-      body: { subscribers },
+      body: {
+        subscribers: input.subscribers,
+        name: input.name,
+        subject: input.subject,
+        lists: input.listIds,
+        type: 'regular',
+        content_type: 'html',
+        body: input.body,
+        messenger: 'email',
+        from_email: input.fromEmail,
+        tags: input.tags ?? ['crm-connector'],
+      },
     });
   }
 

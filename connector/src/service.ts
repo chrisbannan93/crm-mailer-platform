@@ -59,7 +59,18 @@ export type ConnectorDeps = {
       fromEmail?: string;
       tags?: string[];
     }): Promise<{ id: number; uuid?: string }>;
-    sendCampaignTest(campaignId: number, subscribers: string[]): Promise<void>;
+    sendCampaignTest(
+      campaignId: number,
+      input: {
+        subscribers: string[];
+        name: string;
+        subject: string;
+        listIds: number[];
+        body: string;
+        fromEmail?: string;
+        tags?: string[];
+      },
+    ): Promise<void>;
   };
   logger?: {
     info(obj: Record<string, unknown>, msg?: string): void;
@@ -511,15 +522,24 @@ export class ConnectorService {
 
     const html = input.bodyHtml ?? `<p>Hello from CRM + listmonk connector.</p><p><a href="${clickUrl.toString()}">Tracked link</a></p><img src="${openUrl.toString()}" alt="" width="1" height="1" />`;
 
+    const campaignName = buildSafeCampaignName(input.campaignName);
+
     const campaign = await this.deps.listmonk.createCampaign({
-      name: buildSafeCampaignName(input.campaignName),
+      name: campaignName,
       subject: input.subject,
       listIds: [list.id],
       body: html,
       tags: [...this.deps.vertical.defaultList.tags, 'connector-test'],
     });
 
-    await this.deps.listmonk.sendCampaignTest(campaign.id, [input.to]);
+    await this.deps.listmonk.sendCampaignTest(campaign.id, {
+      subscribers: [input.to],
+      name: campaignName,
+      subject: input.subject,
+      listIds: [list.id],
+      body: html,
+      tags: [...this.deps.vertical.defaultList.tags, 'connector-test'],
+    });
 
     this.deps.store.addEvent({
       kind: 'campaign',

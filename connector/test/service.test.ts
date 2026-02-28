@@ -281,5 +281,14 @@ describe('ConnectorService', () => {
         name: 'Connector Test 2026-02-28T065538742Z',
       }),
     );
+    expect(listmonk.sendCampaignTest).toHaveBeenCalledWith(
+      77,
+      expect.objectContaining({
+        subscribers: ['proof@example.com'],
+        name: 'Connector Test 2026-02-28T065538742Z',
+        subject: 'Connector proof',
+        listIds: [1],
+      }),
+    );
   });
 });

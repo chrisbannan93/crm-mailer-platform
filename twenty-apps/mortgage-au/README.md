@@ -22,3 +22,5 @@ Scope for the first slice:
 ## Notes
 - This package is mortgage-specific and intentionally separate from `mailer-studio-nav`.
 - The existing connector and Mailer Studio remain separate; this package only handles Twenty-side object automation.
+- On the local self-hosted Twenty stack, `yarn twenty app:dev .` currently reaches manifest sync and then fails because the runtime cannot resolve built-in system flat entities such as `timelineActivity` for custom-object sync.
+- Until that runtime gap is removed, the manual Twenty setup in `verticals/mortgage_au/schema/` remains the active MVP path.

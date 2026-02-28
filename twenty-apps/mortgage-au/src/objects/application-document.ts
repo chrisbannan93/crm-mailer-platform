@@ -40,10 +40,15 @@ export default defineObject({
       type: FieldType.RELATION,
       name: 'loanApplication',
       label: 'Loan Application',
-      relationType: RelationType.MANY_TO_ONE,
-      targetObject: LOAN_APPLICATION_OBJECT_UNIVERSAL_IDENTIFIER,
-      targetFieldLabel: 'documents',
-      onDelete: OnDeleteAction.CASCADE,
+      relationTargetFieldMetadataUniversalIdentifier:
+        'f09b42ca-90e2-4fe5-bbd1-04f7b02d2b5d',
+      relationTargetObjectMetadataUniversalIdentifier:
+        LOAN_APPLICATION_OBJECT_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.CASCADE,
+        joinColumnName: 'loanApplicationId',
+      },
     }),
     field({
       universalIdentifier: APPLICATION_DOCUMENT_FIELDS.documentKey,

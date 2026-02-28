@@ -1,9 +1,7 @@
 import {
   defineObject,
   FieldType,
-  OnDeleteAction,
   RelationType,
-  STANDARD_OBJECT,
 } from 'twenty-sdk';
 import { fieldForObject } from 'src/utils/field';
 
@@ -23,7 +21,8 @@ export const LOAN_APPLICATION_FIELDS = {
   applicationId: '76976844-b8f7-463f-92f7-5328f02af700',
   applicationType: '23ff3dc4-c230-4f4e-95c7-26220f9fcf4b',
   pipelineStage: '0f6acfdd-777a-4ad4-a1e3-3a9b7c37d9ef',
-  contactPerson: 'f9e60d40-f7f9-4b96-aafd-4185b1dae0bc',
+  contactPersonRecordId: 'f9e60d40-f7f9-4b96-aafd-4185b1dae0bc',
+  documents: 'f09b42ca-90e2-4fe5-bbd1-04f7b02d2b5d',
   borrowerName: '95290c90-d1c0-4e4b-b716-92fc1495dbb8',
   brokerOwner: '96cefddc-850e-4111-89b0-48044d760347',
   loanPurpose: '754d7fa5-e4e7-416b-9dd7-3fecf9335e50',
@@ -89,14 +88,23 @@ export default defineObject({
       ],
     }),
     field({
-      universalIdentifier: LOAN_APPLICATION_FIELDS.contactPerson,
+      universalIdentifier: LOAN_APPLICATION_FIELDS.contactPersonRecordId,
+      type: FieldType.TEXT,
+      name: 'contactPersonRecordId',
+      label: 'Contact Person Record ID',
+    }),
+    field({
+      universalIdentifier: LOAN_APPLICATION_FIELDS.documents,
       type: FieldType.RELATION,
-      name: 'contactPerson',
-      label: 'Contact Person',
-      relationType: RelationType.MANY_TO_ONE,
-      targetObject: STANDARD_OBJECT.person.universalIdentifier,
-      targetFieldLabel: 'loanApplications',
-      onDelete: OnDeleteAction.SET_NULL,
+      name: 'documents',
+      label: 'Documents',
+      relationTargetFieldMetadataUniversalIdentifier:
+        '05af71c2-0983-4af8-b5be-bacc5acbfdc7',
+      relationTargetObjectMetadataUniversalIdentifier:
+        '7c6e421c-6bf7-476a-9736-5cb9b74d5d65',
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
     }),
     field({
       universalIdentifier: LOAN_APPLICATION_FIELDS.borrowerName,

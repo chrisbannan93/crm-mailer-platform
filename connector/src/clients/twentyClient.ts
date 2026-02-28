@@ -181,8 +181,10 @@ export class TwentyClient {
 
     const obj = (raw ?? {}) as Record<string, unknown>;
     const candidates = [
+      obj.people,
       obj.results,
       obj.records,
+      (obj.data as Record<string, unknown> | undefined)?.people,
       (obj.data as Record<string, unknown> | undefined)?.results,
       (obj.data as Record<string, unknown> | undefined)?.records,
       (obj.items as Record<string, unknown> | undefined),

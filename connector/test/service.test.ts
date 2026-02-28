@@ -97,6 +97,34 @@ describe('ConnectorService', () => {
     expect(attribs.tags).toEqual(['vip', 'lead']);
   });
 
+  it('maps Twenty REST people shape with nested emails and name fields', () => {
+    const mapped = mapTwentyContactToContactRecord({
+      id: 'tw_2',
+      name: {
+        firstName: 'Proof',
+        lastName: 'One',
+      },
+      emails: {
+        primaryEmail: 'ChrisBannan93@gmail.com',
+        additionalEmails: [],
+      },
+      phones: {
+        primaryPhoneNumber: '0400000000',
+      },
+      updatedAt: '2026-02-28T07:17:07.329Z',
+    });
+
+    expect(mapped).toMatchObject({
+      crmId: 'tw_2',
+      email: 'chrisbannan93@gmail.com',
+      firstName: 'Proof',
+      lastName: 'One',
+      fullName: 'Proof One',
+      phone: '0400000000',
+      updatedAt: '2026-02-28T07:17:07.329Z',
+    });
+  });
+
   it('bounded sync skips contacts without email and updates cursor state', async () => {
     const listmonk = {
       listLists: vi.fn().mockResolvedValue([]),

@@ -749,13 +749,17 @@ function pickStringArray(obj: Record<string, unknown>, keys: string[]): string[]
 }
 
 export function mapTwentyContactToContactRecord(raw: Record<string, unknown>): ContactRecord | null {
-  const email = pickString(raw, ['email', 'primaryEmail']);
+  const emails = (raw.emails as Record<string, unknown> | undefined) ?? {};
+  const nameRecord = (raw.name as Record<string, unknown> | undefined) ?? {};
+  const phones = (raw.phones as Record<string, unknown> | undefined) ?? {};
+
+  const email = pickString(raw, ['email', 'primaryEmail']) ?? pickString(emails, ['primaryEmail']);
   if (!email) return null;
 
-  const firstName = pickString(raw, ['firstName']);
-  const lastName = pickString(raw, ['lastName']);
+  const firstName = pickString(raw, ['firstName']) ?? pickString(nameRecord, ['firstName']);
+  const lastName = pickString(raw, ['lastName']) ?? pickString(nameRecord, ['lastName']);
   const fullName =
-    pickString(raw, ['name', 'fullName']) ?? ([firstName, lastName].filter(Boolean).join(' ').trim() || undefined);
+    pickString(raw, ['fullName']) ?? ([firstName, lastName].filter(Boolean).join(' ').trim() || undefined);
 
   return {
     crmId: pickString(raw, ['id']),
@@ -763,7 +767,9 @@ export function mapTwentyContactToContactRecord(raw: Record<string, unknown>): C
     firstName,
     lastName,
     fullName,
-    phone: pickString(raw, ['phone', 'phoneNumber', 'mobilePhone']),
+    phone:
+      pickString(raw, ['phone', 'phoneNumber', 'mobilePhone']) ??
+      pickString(phones, ['primaryPhoneNumber']),
     tags: pickStringArray(raw, ['tags', 'tagNames', 'labels']),
     updatedAt: pickString(raw, ['updatedAt']),
     raw,

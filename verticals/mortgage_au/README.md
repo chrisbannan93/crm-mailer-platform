@@ -27,8 +27,8 @@ Restart connector after changing vertical.
 ## Twenty App Automation Status
 - `twenty-apps/mortgage-au/` now contains a code-managed Twenty app slice for `Loan Application` and `Application Document`.
 - The package typechecks on Node 24 + Yarn 4.
-- Local install is currently blocked by the running Twenty server rejecting app creation with `This endpoint is only available in development or test environments`.
-- Until the local Twenty server is started with app-dev support, the documented manual setup in `schema/` remains the active MVP path.
+- The local stack now exposes app-dev endpoints when `TWENTY_NODE_ENV=development`, but the self-hosted runtime still rejects app-managed custom-object sync because built-in system flat entities like `timelineActivity` are missing.
+- Until the local Twenty runtime supports that sync path, the documented manual setup in `schema/` remains the active MVP path.
 
 ## Terminal Helper
 Build Mailer Studio template context directly from a live Loan Application record:
@@ -37,7 +37,23 @@ Build Mailer Studio template context directly from a live Loan Application recor
 verticals/mortgage_au/scripts/build_template_context.sh APP-001 | jq .
 ```
 
-Use the output as the JSON body for `/templates/email/render` or `/campaigns/send-template`.
+Render a template directly from a live application:
+
+```bash
+verticals/mortgage_au/scripts/render_template_for_application.sh APP-001 retail_documents_request | jq .
+```
+
+Send a template directly from a live application:
+
+```bash
+verticals/mortgage_au/scripts/send_template_for_application.sh \
+  APP-001 \
+  retail_documents_request \
+  proof@example.com \
+  <twenty-person-id> | jq .
+```
+
+Use these helpers to avoid hand-writing JSON for `/templates/email/render` or `/campaigns/send-template`.
 
 ## Files To Review First
 - `config/segments.json`

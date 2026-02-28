@@ -146,6 +146,17 @@ curl -X POST http://localhost:4010/campaigns/send-template \
   }'
 ```
 
+### Application-aware template shortcuts
+```bash
+verticals/mortgage_au/scripts/render_template_for_application.sh APP-001 retail_documents_request | jq .
+
+verticals/mortgage_au/scripts/send_template_for_application.sh \
+  APP-001 \
+  retail_documents_request \
+  proof@example.com \
+  <twenty-person-id> | jq .
+```
+
 ### Recent events
 ```bash
 curl 'http://localhost:4010/events/recent?limit=20'
@@ -161,5 +172,5 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://
 ## Talking points
 - Mortgage-specific assets remain isolated under `verticals/mortgage_au/`.
 - The connector core only gained a generic template loader/render/send path that future verticals can reuse.
-- The current MVP still relies on manual Twenty custom-object setup because the Twenty Apps custom-object install path is alpha and not yet wired into this repo.
+- The current MVP still relies on manual Twenty custom-object setup because the self-hosted Twenty runtime rejects built-in system flat entities needed for app-managed custom-object sync.
 - The stable local CRM writeback path for MVP is `rest_note`; `workflow_webhook` remains available but depends on correct workflow configuration inside Twenty.

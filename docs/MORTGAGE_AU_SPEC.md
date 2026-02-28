@@ -192,8 +192,9 @@ Each template should support merge values from:
 ## What Is MVP vs Later
 ### MVP
 - config-driven retail/commercial segments
-- documented Loan Application schema for Twenty custom object setup
-- checklist definitions and stage-gate config in vertical files
+- documented Loan Application and Application Document schema for manual Twenty custom object setup
+- checklist definitions, seed records, and stage-gate config in vertical files
+- task/reminder defaults for broker and admin follow-up
 - listmonk templates for retail/commercial emails
 - Mailer Studio template render/send using vertical assets
 - engagement metadata can include `applicationId`

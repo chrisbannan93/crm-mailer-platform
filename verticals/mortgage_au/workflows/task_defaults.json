@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "taskDefaults": {
+    "retail_home_loan": [
+      {
+        "trigger": "application_created",
+        "title": "APP-001 Book retail discovery call",
+        "ownerRole": "broker",
+        "offsetDays": 1,
+        "priority": "high"
+      },
+      {
+        "trigger": "docs_requested",
+        "title": "APP-001 Chase missing retail documents",
+        "ownerRole": "admin",
+        "offsetDays": 2,
+        "priority": "high"
+      }
+    ],
+    "commercial_loan": [
+      {
+        "trigger": "application_created",
+        "title": "APP-201 Review commercial deal structure",
+        "ownerRole": "broker",
+        "offsetDays": 1,
+        "priority": "high"
+      },
+      {
+        "trigger": "docs_requested",
+        "title": "APP-201 Collect commercial financial pack",
+        "ownerRole": "admin",
+        "offsetDays": 2,
+        "priority": "high"
+      }
+    ]
+  }
+}

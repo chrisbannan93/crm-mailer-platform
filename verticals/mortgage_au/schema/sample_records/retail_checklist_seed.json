@@ -1,0 +1,7 @@
+[
+  { "applicationId": "APP-001", "documentKey": "id", "documentLabel": "ID", "required": true, "status": "received", "ownerRole": "admin" },
+  { "applicationId": "APP-001", "documentKey": "payslips_or_income_proof", "documentLabel": "Payslips / income proof", "required": true, "status": "requested", "ownerRole": "admin" },
+  { "applicationId": "APP-001", "documentKey": "bank_statements", "documentLabel": "Bank statements", "required": true, "status": "requested", "ownerRole": "admin" },
+  { "applicationId": "APP-001", "documentKey": "living_expenses", "documentLabel": "Living expenses summary", "required": true, "status": "missing", "ownerRole": "broker" },
+  { "applicationId": "APP-001", "documentKey": "privacy_consent", "documentLabel": "Privacy consent", "required": true, "status": "received", "ownerRole": "broker" }
+]

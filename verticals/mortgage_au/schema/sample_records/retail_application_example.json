@@ -1,0 +1,17 @@
+{
+  "applicationId": "APP-001",
+  "applicationType": "retail_home_loan",
+  "pipelineStage": "docs_requested",
+  "borrowerName": "Proof One",
+  "contactPersonId": "<twenty-person-id>",
+  "brokerOwner": "Broker Name",
+  "loanPurpose": "purchase",
+  "loanAmount": 780000,
+  "estimatedPropertyValue": 950000,
+  "lvrBand": "80_90",
+  "targetSettlementDate": "2026-03-31",
+  "lenderTarget": "Example Lender",
+  "occupancyType": "owner_occupied",
+  "firstHomeBuyer": false,
+  "notesSummary": "Retail owner occupied purchase, docs requested."
+}

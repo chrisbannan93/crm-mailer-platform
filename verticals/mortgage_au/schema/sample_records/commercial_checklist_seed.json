@@ -1,0 +1,8 @@
+[
+  { "applicationId": "APP-201", "documentKey": "id", "documentLabel": "Director / guarantor ID", "required": true, "status": "received", "ownerRole": "admin" },
+  { "applicationId": "APP-201", "documentKey": "entity_financials", "documentLabel": "Entity financials", "required": true, "status": "requested", "ownerRole": "admin" },
+  { "applicationId": "APP-201", "documentKey": "bank_statements", "documentLabel": "Business bank statements", "required": true, "status": "requested", "ownerRole": "admin" },
+  { "applicationId": "APP-201", "documentKey": "abn_gst_evidence", "documentLabel": "ABN / GST evidence", "required": true, "status": "received", "ownerRole": "broker" },
+  { "applicationId": "APP-201", "documentKey": "security_details", "documentLabel": "Security details", "required": true, "status": "missing", "ownerRole": "broker" },
+  { "applicationId": "APP-201", "documentKey": "privacy_consent", "documentLabel": "Privacy consent", "required": true, "status": "received", "ownerRole": "broker" }
+]

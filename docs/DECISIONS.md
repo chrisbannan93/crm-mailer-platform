@@ -40,3 +40,9 @@
 - Why: Future verticals need a shared way to render and send vertical-owned listmonk templates without embedding business logic in connector core.
 - Alternatives: Keep templates as docs-only assets, or hardcode mortgage templates into the connector UI.
 - Impact: Core connector now loads `verticals/<VERTICAL>/templates/email/*.json`, renders them with merge context, and exposes generic preview/send endpoints used by Mailer Studio.
+
+### 2026-02-28 - Use manual Twenty custom-object setup for Mortgage AU MVP
+- Status: Accepted
+- Why: The current repo has a working connector/template path but not a verified Twenty Apps custom-object install flow for local automation.
+- Alternatives: Block the MVP on Twenty Apps alpha tooling, or move mortgage applications out of Twenty and into the connector UI.
+- Impact: Loan Application and Application Document records are documented as manual Twenty setup for v0.2, while mortgage logic and assets remain isolated in the vertical folder.

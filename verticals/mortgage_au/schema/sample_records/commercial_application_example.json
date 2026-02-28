@@ -1,0 +1,19 @@
+{
+  "applicationId": "APP-201",
+  "applicationType": "commercial_loan",
+  "pipelineStage": "docs_requested",
+  "borrowerName": "Example Pty Ltd",
+  "contactPersonId": "<twenty-person-id>",
+  "brokerOwner": "Broker Name",
+  "loanPurpose": "working_capital",
+  "loanAmount": 1500000,
+  "estimatedPropertyValue": 2400000,
+  "lvrBand": "60_70",
+  "targetSettlementDate": "2026-04-15",
+  "lenderTarget": "Commercial Lender",
+  "entityName": "Example Pty Ltd",
+  "entityType": "company",
+  "abn": "12 345 678 901",
+  "securityType": "commercial_property",
+  "notesSummary": "Commercial property refinance for owner-occupied premises."
+}

@@ -24,8 +24,20 @@ Restart connector after changing vertical.
 - Exposes mortgage-specific email templates for rendering/sending from Mailer Studio.
 - Carries `applicationId`, `applicationType`, and stage metadata through template rendering and engagement events when provided in context.
 
-## Current Limitation
-The repo does not yet contain a verified, runnable Twenty App install flow for automatically creating the Loan Application custom object and checklist UI. The required schema is documented in `schema/` and `docs/MORTGAGE_AU_SPEC.md`.
+## Twenty App Automation Status
+- `twenty-apps/mortgage-au/` now contains a code-managed Twenty app slice for `Loan Application` and `Application Document`.
+- The package typechecks on Node 24 + Yarn 4.
+- Local install is currently blocked by the running Twenty server rejecting app creation with `This endpoint is only available in development or test environments`.
+- Until the local Twenty server is started with app-dev support, the documented manual setup in `schema/` remains the active MVP path.
+
+## Terminal Helper
+Build Mailer Studio template context directly from a live Loan Application record:
+
+```bash
+verticals/mortgage_au/scripts/build_template_context.sh APP-001 | jq .
+```
+
+Use the output as the JSON body for `/templates/email/render` or `/campaigns/send-template`.
 
 ## Files To Review First
 - `config/segments.json`

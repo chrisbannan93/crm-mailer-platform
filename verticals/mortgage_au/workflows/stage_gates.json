@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "gates": {
+    "retail_home_loan": {
+      "submitted": {
+        "requiredDocuments": [
+          "id",
+          "payslips_or_income_proof",
+          "bank_statements",
+          "living_expenses",
+          "privacy_consent"
+        ],
+        "warnings": [
+          "Retail applications should not move to submitted until core servicing docs are marked received or accepted."
+        ],
+        "autoTasks": [
+          {
+            "role": "admin",
+            "title": "Chase missing retail documents",
+            "offsetDays": 0
+          }
+        ]
+      }
+    },
+    "commercial_loan": {
+      "submitted": {
+        "requiredDocuments": [
+          "id",
+          "entity_financials",
+          "bank_statements",
+          "abn_gst_evidence",
+          "security_details",
+          "privacy_consent"
+        ],
+        "warnings": [
+          "Commercial submissions require complete entity, bank, and security evidence before lender packaging."
+        ],
+        "autoTasks": [
+          {
+            "role": "broker",
+            "title": "Review commercial submission gaps",
+            "offsetDays": 0
+          }
+        ]
+      }
+    }
+  }
+}

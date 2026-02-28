@@ -1,0 +1,9 @@
+{
+  "key": "commercial_documents_request",
+  "name": "Commercial documents request",
+  "audience": "commercial_loan",
+  "trigger": "docs_requested",
+  "subject": "Commercial file {{application.applicationId}} documents required",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>To progress {{application.entityName}}'s commercial loan request we need:</p><ul><li>{{checklist.requiredSummary}}</li></ul><p>Please send the documents to allow us to prepare the lender submission pack.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nTo progress {{application.entityName}}'s commercial loan request we need:\n{{checklist.requiredSummary}}\n\nRegards,\n{{broker.signature}}"
+}

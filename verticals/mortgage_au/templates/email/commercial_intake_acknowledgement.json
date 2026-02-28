@@ -1,0 +1,9 @@
+{
+  "key": "commercial_intake_acknowledgement",
+  "name": "Commercial intake acknowledgement",
+  "audience": "commercial_loan",
+  "trigger": "application_created",
+  "subject": "Commercial lending file opened for {{application.entityName}}",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>We have opened commercial lending file <strong>{{application.applicationId}}</strong> for {{application.entityName}}.</p><p>We will review structure, security, and finance documentation before submission.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nWe have opened commercial lending file {{application.applicationId}} for {{application.entityName}}.\n\nRegards,\n{{broker.signature}}"
+}

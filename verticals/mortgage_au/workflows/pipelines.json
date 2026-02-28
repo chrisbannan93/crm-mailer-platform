@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "pipelines": {
+    "retail_home_loan": [
+      "lead_captured",
+      "discovery_booked",
+      "fact_find_complete",
+      "docs_requested",
+      "docs_complete",
+      "servicing_assessed",
+      "submitted",
+      "conditional_approval",
+      "formal_approval",
+      "settled",
+      "closed_lost"
+    ],
+    "commercial_loan": [
+      "lead_captured",
+      "discovery_booked",
+      "deal_structuring",
+      "docs_requested",
+      "docs_complete",
+      "credit_paper_ready",
+      "submitted",
+      "indicative_offer",
+      "conditional_approval",
+      "formal_approval",
+      "settled",
+      "closed_lost"
+    ]
+  }
+}

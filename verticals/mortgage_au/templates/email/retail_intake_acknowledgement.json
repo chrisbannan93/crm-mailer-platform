@@ -1,0 +1,9 @@
+{
+  "key": "retail_intake_acknowledgement",
+  "name": "Retail intake acknowledgement",
+  "audience": "retail_home_loan",
+  "trigger": "application_created",
+  "subject": "{{contact.firstName}} we have started your home loan application",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>We have opened your retail home loan application <strong>{{application.applicationId}}</strong>.</p><p>Your broker is {{broker.name}}. We will confirm next steps after reviewing your goals, timeline, and supporting documents.</p><p>Current stage: <strong>{{application.pipelineStage}}</strong>.</p><p>Thanks,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nWe have opened your retail home loan application {{application.applicationId}}.\nYour broker is {{broker.name}}. Current stage: {{application.pipelineStage}}.\n\nThanks,\n{{broker.signature}}"
+}

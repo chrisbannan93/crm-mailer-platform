@@ -1,4 +1,48 @@
 {
   "version": 1,
-  "segments": []
+  "segments": [
+    {
+      "key": "retail_home_loans",
+      "name": "Retail Home Loans",
+      "description": "Borrowers tagged for residential owner-occupied or investment home lending",
+      "listName": "Mortgage AU - Retail Home Loans",
+      "match": "any",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "mortgage-retail" },
+        { "field": "tags", "op": "includes", "value": "mortgage-home-loan" },
+        { "field": "tags", "op": "includes", "value": "mortgage-first-home" }
+      ]
+    },
+    {
+      "key": "commercial_loans",
+      "name": "Commercial Loans",
+      "description": "Borrowers and entity contacts tagged for commercial loan opportunities",
+      "listName": "Mortgage AU - Commercial Loans",
+      "match": "any",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "mortgage-commercial" },
+        { "field": "tags", "op": "includes", "value": "mortgage-commercial-property" }
+      ]
+    },
+    {
+      "key": "docs_pending",
+      "name": "Docs Pending",
+      "description": "Contacts waiting on required mortgage documents",
+      "listName": "Mortgage AU - Docs Pending",
+      "match": "all",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "mortgage-docs-pending" }
+      ]
+    },
+    {
+      "key": "submitted",
+      "name": "Submitted",
+      "description": "Applications already submitted to a lender",
+      "listName": "Mortgage AU - Submitted",
+      "match": "all",
+      "rules": [
+        { "field": "tags", "op": "includes", "value": "mortgage-submitted" }
+      ]
+    }
+  ]
 }

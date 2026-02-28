@@ -1,0 +1,9 @@
+{
+  "key": "retail_documents_request",
+  "name": "Retail documents request",
+  "audience": "retail_home_loan",
+  "trigger": "docs_requested",
+  "subject": "Documents needed for application {{application.applicationId}}",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>To move your home loan application forward we need the following:</p><ul><li>{{checklist.requiredSummary}}</li></ul><p>Please reply with the documents or tell us if you need help sourcing any item.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nTo move your home loan application forward we need the following:\n{{checklist.requiredSummary}}\n\nRegards,\n{{broker.signature}}"
+}

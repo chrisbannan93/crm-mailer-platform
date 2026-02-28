@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "checklists": {
+    "retail_home_loan": [
+      { "key": "id", "label": "ID", "required": true },
+      { "key": "payslips_or_income_proof", "label": "Payslips / income proof", "required": true },
+      { "key": "employment_letter_optional", "label": "Employment letter", "required": false },
+      { "key": "bank_statements", "label": "Bank statements", "required": true },
+      { "key": "living_expenses", "label": "Living expenses summary", "required": true },
+      { "key": "existing_loan_statements", "label": "Existing loan statements", "required": false },
+      { "key": "contract_of_sale_optional", "label": "Contract of sale", "required": false },
+      { "key": "privacy_consent", "label": "Privacy consent", "required": true }
+    ],
+    "commercial_loan": [
+      { "key": "id", "label": "Director / guarantor ID", "required": true },
+      { "key": "entity_financials", "label": "Entity financials", "required": true },
+      { "key": "bank_statements", "label": "Business bank statements", "required": true },
+      { "key": "abn_gst_evidence", "label": "ABN / GST evidence", "required": true },
+      { "key": "trust_deed_optional", "label": "Trust deed", "required": false },
+      { "key": "security_details", "label": "Security details", "required": true },
+      { "key": "asset_liability_statement", "label": "Asset and liability statement", "required": false },
+      { "key": "privacy_consent", "label": "Privacy consent", "required": true }
+    ]
+  }
+}

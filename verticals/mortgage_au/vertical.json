@@ -1,23 +1,24 @@
 {
   "name": "mortgage_au",
-  "version": 1,
+  "version": 2,
   "defaultList": {
-    "name": "Mortgage AU Leads",
+    "name": "Mortgage AU Pipeline",
     "type": "private",
     "optin": "single",
-    "tags": ["crm", "mortgage_au", "placeholder"],
-    "description": "Placeholder list for AU mortgage broking contacts"
+    "tags": ["crm", "mortgage_au", "au"],
+    "description": "Default list for Australia mortgage applications and borrowers"
   },
   "subscriberAttribs": {
     "includeTwentyPersonId": true,
     "static": {
       "vertical": "mortgage_au",
       "country": "AU",
-      "compliancePlaceholder": true
+      "industry": "mortgage_broking",
+      "sourceCrm": "twenty"
     }
   },
   "notes": [
-    "Placeholder only. Keep all mortgage-specific logic in this folder.",
-    "TODO: broker stages, compliance tags, consent model."
+    "Retail and commercial mortgage workflows are defined under workflows/.",
+    "Mortgage-specific templates and schema definitions stay inside this vertical folder."
   ]
 }

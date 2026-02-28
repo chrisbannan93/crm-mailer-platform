@@ -1,0 +1,9 @@
+{
+  "key": "retail_submission_confirmation",
+  "name": "Retail submission confirmation",
+  "audience": "retail_home_loan",
+  "trigger": "submitted",
+  "subject": "Your home loan application has been submitted",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>Your application <strong>{{application.applicationId}}</strong> has now been submitted to {{application.lenderTarget}}.</p><p>We will contact you when we receive an update from the lender.</p><p>Thanks,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nYour application {{application.applicationId}} has now been submitted to {{application.lenderTarget}}.\n\nThanks,\n{{broker.signature}}"
+}

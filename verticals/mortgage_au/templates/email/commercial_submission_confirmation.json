@@ -1,0 +1,9 @@
+{
+  "key": "commercial_submission_confirmation",
+  "name": "Commercial submission confirmation",
+  "audience": "commercial_loan",
+  "trigger": "submitted",
+  "subject": "Commercial application submitted to {{application.lenderTarget}}",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>Your commercial application <strong>{{application.applicationId}}</strong> has been submitted to {{application.lenderTarget}}.</p><p>We will update you once indicative terms or credit feedback are available.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nYour commercial application {{application.applicationId}} has been submitted to {{application.lenderTarget}}.\n\nRegards,\n{{broker.signature}}"
+}

@@ -1,0 +1,26 @@
+{
+  "object": "Loan Application",
+  "slug": "loan_application",
+  "description": "Mortgage AU application record for retail and commercial lending.",
+  "fields": [
+    { "name": "applicationId", "type": "text", "required": true },
+    { "name": "applicationType", "type": "select", "required": true, "options": ["retail_home_loan", "commercial_loan"] },
+    { "name": "pipelineStage", "type": "select", "required": true },
+    { "name": "contactPersonId", "type": "relation", "required": true, "target": "person" },
+    { "name": "borrowerName", "type": "text", "required": true },
+    { "name": "brokerOwner", "type": "text", "required": true },
+    { "name": "loanPurpose", "type": "select", "required": true, "options": ["purchase", "refinance", "equity_release", "construction", "working_capital", "investment"] },
+    { "name": "loanAmount", "type": "currency", "required": false },
+    { "name": "estimatedPropertyValue", "type": "currency", "required": false },
+    { "name": "lvrBand", "type": "select", "required": false, "options": ["lt_60", "60_70", "70_80", "80_90", "gt_90"] },
+    { "name": "targetSettlementDate", "type": "date", "required": false },
+    { "name": "lenderTarget", "type": "text", "required": false },
+    { "name": "occupancyType", "type": "select", "required": false, "appliesTo": ["retail_home_loan"], "options": ["owner_occupied", "investment"] },
+    { "name": "firstHomeBuyer", "type": "boolean", "required": false, "appliesTo": ["retail_home_loan"] },
+    { "name": "entityName", "type": "text", "required": false, "appliesTo": ["commercial_loan"] },
+    { "name": "entityType", "type": "select", "required": false, "appliesTo": ["commercial_loan"], "options": ["company", "trust", "partnership", "sole_trader"] },
+    { "name": "abn", "type": "text", "required": false, "appliesTo": ["commercial_loan"] },
+    { "name": "securityType", "type": "select", "required": false, "appliesTo": ["commercial_loan"], "options": ["commercial_property", "residential_security", "cashflow", "other"] },
+    { "name": "notesSummary", "type": "long_text", "required": false }
+  ]
+}

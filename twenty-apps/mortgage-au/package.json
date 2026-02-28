@@ -1,0 +1,22 @@
+{
+  "name": "mortgage-au",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "yarn@4.9.2",
+  "engines": {
+    "node": ">=24.5.0",
+    "npm": "please-use-yarn",
+    "yarn": ">=4.0.2"
+  },
+  "scripts": {
+    "twenty": "twenty"
+  },
+  "dependencies": {
+    "twenty-sdk": "0.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.11.0",
+    "typescript": "^5.9.3"
+  }
+}

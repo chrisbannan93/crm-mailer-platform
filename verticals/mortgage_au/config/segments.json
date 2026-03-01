@@ -4,44 +4,41 @@
     {
       "key": "retail_home_loans",
       "name": "Retail Home Loans",
-      "description": "Borrowers tagged for residential owner-occupied or investment home lending",
+      "description": "Contacts attached to at least one retail home loan application",
       "listName": "Mortgage AU - Retail Home Loans",
-      "match": "any",
+      "match": "all",
       "rules": [
-        { "field": "tags", "op": "includes", "value": "mortgage-retail" },
-        { "field": "tags", "op": "includes", "value": "mortgage-home-loan" },
-        { "field": "tags", "op": "includes", "value": "mortgage-first-home" }
+        { "field": "segmentKeys", "op": "includes", "value": "retail_home_loans" }
       ]
     },
     {
       "key": "commercial_loans",
       "name": "Commercial Loans",
-      "description": "Borrowers and entity contacts tagged for commercial loan opportunities",
+      "description": "Contacts attached to at least one commercial loan application",
       "listName": "Mortgage AU - Commercial Loans",
-      "match": "any",
+      "match": "all",
       "rules": [
-        { "field": "tags", "op": "includes", "value": "mortgage-commercial" },
-        { "field": "tags", "op": "includes", "value": "mortgage-commercial-property" }
+        { "field": "segmentKeys", "op": "includes", "value": "commercial_loans" }
       ]
     },
     {
       "key": "docs_pending",
       "name": "Docs Pending",
-      "description": "Contacts waiting on required mortgage documents",
+      "description": "Contacts with at least one application missing required documents",
       "listName": "Mortgage AU - Docs Pending",
       "match": "all",
       "rules": [
-        { "field": "tags", "op": "includes", "value": "mortgage-docs-pending" }
+        { "field": "segmentKeys", "op": "includes", "value": "docs_pending" }
       ]
     },
     {
       "key": "submitted",
       "name": "Submitted",
-      "description": "Applications already submitted to a lender",
+      "description": "Contacts with applications already submitted or beyond lender submission",
       "listName": "Mortgage AU - Submitted",
       "match": "all",
       "rules": [
-        { "field": "tags", "op": "includes", "value": "mortgage-submitted" }
+        { "field": "segmentKeys", "op": "includes", "value": "submitted" }
       ]
     }
   ]

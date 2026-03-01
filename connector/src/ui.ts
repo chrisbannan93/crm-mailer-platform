@@ -222,6 +222,22 @@ export function renderSidecarUi(config: AppConfig): string {
         </div>
       </section>
 
+      <section class="panel col-4">
+        <h2>CRM Quick Load</h2>
+        <label class="small" for="contextApplicationId">Loan Application ID</label>
+        <input id="contextApplicationId" type="text" placeholder="APP-001" />
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="loadApplicationBtn" class="ghost">Load Application</button>
+          <button id="sendRecommendedBtn" class="secondary">Send Recommended</button>
+        </div>
+        <label class="small" for="contextPersonId" style="display:block; margin-top:14px;">Person ID</label>
+        <input id="contextPersonId" type="text" placeholder="Twenty person id" />
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="loadPersonBtn" class="ghost">Load Person</button>
+        </div>
+        <p class="small" style="margin-top:10px;">These actions fetch live Twenty context and prefill the compose form without hand-editing JSON.</p>
+      </section>
+
       <section class="panel col-8">
         <h2>Recent Engagement Events</h2>
         <div class="btnRow" style="margin-top:0; margin-bottom:10px;">
@@ -253,6 +269,9 @@ export function renderSidecarUi(config: AppConfig): string {
       $('refreshAllBtn').disabled = v;
       $('previewTemplateBtn').disabled = v;
       $('sendTemplateBtn').disabled = v;
+      $('loadApplicationBtn').disabled = v;
+      $('loadPersonBtn').disabled = v;
+      $('sendRecommendedBtn').disabled = v;
     }
 
     function writeLog(value) {
@@ -324,6 +343,7 @@ export function renderSidecarUi(config: AppConfig): string {
           value.broker.signature = brokerName;
         }
         if (applicationId) value.application.applicationId = applicationId;
+        if (personId) value.contact.id = personId;
         if (pipelineStage) value.application.pipelineStage = pipelineStage;
         if (applicationType) value.application.applicationType = applicationType;
         if (lenderTarget) value.application.lenderTarget = lenderTarget;
@@ -439,6 +459,56 @@ export function renderSidecarUi(config: AppConfig): string {
       });
     }
 
+    function applyContextPayload(payload) {
+      if (!payload) return;
+      const suggestedTemplate = payload.suggestedTemplateKey;
+      if (payload.context?.contact?.email) $('templateRecipient').value = payload.context.contact.email;
+      if (payload.context?.contact?.id) $('templatePersonId').value = payload.context.contact.id;
+      $('templateContext').value = JSON.stringify(payload.context || {}, null, 2);
+      if (suggestedTemplate) {
+        window.__prefillTemplate = suggestedTemplate;
+        const options = Array.from($('templateSelect').options);
+        const match = options.find((option) => option.value === suggestedTemplate);
+        if (match) $('templateSelect').value = suggestedTemplate;
+      }
+    }
+
+    async function loadApplicationContext() {
+      const applicationId = $('contextApplicationId').value.trim();
+      if (!applicationId) throw new Error('Enter a Loan Application ID');
+      const data = await api('/studio/context/application/' + encodeURIComponent(applicationId));
+      applyContextPayload({
+        context: data.data,
+        suggestedTemplateKey: data.suggestedTemplateKey || data.data?.suggestedTemplateKey,
+      });
+      return data;
+    }
+
+    async function loadPersonContext() {
+      const personId = $('contextPersonId').value.trim();
+      if (!personId) throw new Error('Enter a Person ID');
+      const data = await api('/studio/context/person/' + encodeURIComponent(personId));
+      applyContextPayload({
+        context: data.data,
+        suggestedTemplateKey: data.suggestedTemplateKey || data.data?.suggestedTemplateKey,
+      });
+      return data;
+    }
+
+    async function sendRecommendedForApplication() {
+      const applicationId = $('contextApplicationId').value.trim();
+      if (!applicationId) throw new Error('Enter a Loan Application ID');
+      return api('/campaigns/send-for-application', {
+        method: 'POST',
+        body: JSON.stringify({
+          applicationId,
+          templateKey: $('templateSelect').value || undefined,
+          to: $('templateRecipient').value.trim() || undefined,
+          personId: $('templatePersonId').value.trim() || undefined,
+        }),
+      });
+    }
+
     async function wrapAction(label, fn) {
       if (busy) return;
       setBusy(true);
@@ -460,6 +530,9 @@ export function renderSidecarUi(config: AppConfig): string {
     $('refreshAllBtn').onclick = () => wrapAction('refresh-all-events', refreshAllEventsToLog);
     $('previewTemplateBtn').onclick = () => wrapAction('preview-template', previewTemplate);
     $('sendTemplateBtn').onclick = () => wrapAction('send-template', sendTemplate);
+    $('loadApplicationBtn').onclick = () => wrapAction('load-application-context', loadApplicationContext);
+    $('loadPersonBtn').onclick = () => wrapAction('load-person-context', loadPersonContext);
+    $('sendRecommendedBtn').onclick = () => wrapAction('send-recommended-template', sendRecommendedForApplication);
 
     applyPrefills();
     (async () => {

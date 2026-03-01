@@ -1,5 +1,5 @@
 import type { AppConfig } from '../config/env.js';
-import type { EngagementEvent, PublicLead, PublicLeadResult } from '../types/index.js';
+import type { EngagementEvent, PublicLead, PublicLeadResult, StudioTemplateContext } from '../types/index.js';
 
 export type TwentyContact = Record<string, unknown> & {
   id?: string;
@@ -11,6 +11,56 @@ export type TwentyContact = Record<string, unknown> & {
 export type TwentyListContactsResult = {
   contacts: TwentyContact[];
   nextCursor?: string;
+};
+
+type MortgageApplicationNode = {
+  id?: string;
+  applicationid?: string;
+  applicationtype?: string | null;
+  pipelinestage?: string | null;
+  borrowername?: string;
+  brokerowner?: string;
+  loanpurpose?: string | null;
+  loanamount?: { amountMicros?: number | null; currencyCode?: string | null } | null;
+  estimatedpropertyvalue?: { amountMicros?: number | null; currencyCode?: string | null } | null;
+  lvrband?: string | null;
+  targetsettlementdate?: string | null;
+  lendertarget?: string;
+  occupancytype?: string | null;
+  firsthomebuyer?: boolean;
+  entityname?: string;
+  entitytype?: string | null;
+  abn?: string;
+  securitytype?: string | null;
+  notessummary?: string;
+  updatedAt?: string;
+  contactperson?: {
+    edges?: Array<{
+      node?: {
+        id?: string;
+        name?: { firstName?: string; lastName?: string };
+        emails?: { primaryEmail?: string };
+      };
+    }>;
+  };
+  documents?: {
+    edges?: Array<{
+      node?: {
+        id?: string;
+        documentLabel?: string;
+        required?: boolean;
+        status?: string | null;
+        ownerrole?: string | null;
+        notes?: string;
+        recievedat?: string | null;
+        validatedat?: string | null;
+      };
+    }>;
+  };
+};
+
+type MortgageSegmentProfile = {
+  segmentKeys: string[];
 };
 
 export class TwentyClientError extends Error {
@@ -78,6 +128,63 @@ export class TwentyClient {
       throw new Error('TWENTY_AUTH_TOKEN or TWENTY_API_KEY is required for manual person sync');
     }
     return this.request<Record<string, unknown>>(`${this.config.restPath}/people/${id}`);
+  }
+
+  async getStudioContextForApplication(applicationId: string): Promise<StudioTemplateContext | null> {
+    const applications = await this.listMortgageApplicationNodes();
+    const match = applications.find((item) => item.applicationid === applicationId || item.id === applicationId);
+    return match ? mapMortgageApplicationNodeToContext(match) : null;
+  }
+
+  async getStudioContextForPerson(personId: string): Promise<StudioTemplateContext | null> {
+    const applications = await this.listMortgageApplicationNodes();
+    const matches = applications
+      .filter((item) => {
+        const contactId = item.contactperson?.edges?.[0]?.node?.id;
+        return contactId === personId;
+      })
+      .sort((left, right) => rankMortgageApplication(right) - rankMortgageApplication(left));
+
+    if (matches.length > 0) {
+      return mapMortgageApplicationNodeToContext(matches[0]);
+    }
+
+    const person = await this.fetchPersonById(personId);
+    return {
+      contact: {
+        id: getString(person.id),
+        firstName: getString((person.name as Record<string, unknown> | undefined)?.firstName) ?? getString(person.firstName),
+        lastName: getString((person.name as Record<string, unknown> | undefined)?.lastName) ?? getString(person.lastName),
+        email:
+          getString((person.emails as Record<string, unknown> | undefined)?.primaryEmail) ??
+          getString(person.email) ??
+          getString(person.primaryEmail),
+      },
+      broker: {},
+      application: {},
+      checklist: { requiredSummary: '', items: [] },
+    };
+  }
+
+  async listMortgageSegmentProfilesByEmail(): Promise<Map<string, MortgageSegmentProfile>> {
+    const applications = await this.listMortgageApplicationNodes();
+    const profiles = new Map<string, Set<string>>();
+
+    for (const application of applications) {
+      const email = application.contactperson?.edges?.[0]?.node?.emails?.primaryEmail?.trim().toLowerCase();
+      if (!email) continue;
+
+      const set = profiles.get(email) ?? new Set<string>();
+      if (application.applicationtype === 'RETAIL_HOME_LOAN') set.add('retail_home_loans');
+      if (application.applicationtype === 'COMMERCIAL_LOAN') set.add('commercial_loans');
+      if (isSubmittedLikeStage(application.pipelinestage)) set.add('submitted');
+      if (hasPendingRequiredDocuments(application)) set.add('docs_pending');
+      profiles.set(email, set);
+    }
+
+    return new Map(
+      Array.from(profiles.entries()).map(([email, segmentKeys]) => [email, { segmentKeys: Array.from(segmentKeys) }]),
+    );
   }
 
   async createPublicLead(lead: PublicLead): Promise<PublicLeadResult> {
@@ -301,6 +408,81 @@ export class TwentyClient {
     });
   }
 
+  private async listMortgageApplicationNodes(): Promise<MortgageApplicationNode[]> {
+    const data = await this.graphqlRequest<{
+      loanApplications?: {
+        edges?: Array<{ node?: MortgageApplicationNode }>;
+      };
+    }>(
+      `
+        query MortgageStudioApplications {
+          loanApplications {
+            edges {
+              node {
+                id
+                applicationid
+                applicationtype
+                pipelinestage
+                borrowername
+                brokerowner
+                loanpurpose
+                updatedAt
+                loanamount {
+                  amountMicros
+                  currencyCode
+                }
+                estimatedpropertyvalue {
+                  amountMicros
+                  currencyCode
+                }
+                lvrband
+                targetsettlementdate
+                lendertarget
+                occupancytype
+                firsthomebuyer
+                entityname
+                entitytype
+                abn
+                securitytype
+                notessummary
+                contactperson {
+                  edges {
+                    node {
+                      id
+                      name {
+                        firstName
+                        lastName
+                      }
+                      emails {
+                        primaryEmail
+                      }
+                    }
+                  }
+                }
+                documents {
+                  edges {
+                    node {
+                      id
+                      documentLabel
+                      required
+                      status
+                      ownerrole
+                      notes
+                      recievedat
+                      validatedat
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+    );
+
+    return (data.loanApplications?.edges ?? []).flatMap((edge) => (edge.node ? [edge.node] : []));
+  }
+
   private getAuthToken(): string | undefined {
     return this.config.authToken || this.config.apiKey;
   }
@@ -341,4 +523,106 @@ export class TwentyClient {
 
     return value || undefined;
   }
+}
+
+function mapMortgageApplicationNodeToContext(application: MortgageApplicationNode): StudioTemplateContext {
+  const contact = application.contactperson?.edges?.[0]?.node ?? {};
+  const documents = (application.documents?.edges ?? []).flatMap((edge) => (edge.node ? [edge.node] : []));
+  const requiredSummary = documents
+    .filter((item) => item.required && !['received', 'accepted', 'waived'].includes((item.status ?? '').toLowerCase()))
+    .map((item) => item.documentLabel)
+    .filter((value): value is string => Boolean(value))
+    .join(', ');
+
+  return {
+    contact: {
+      id: contact.id,
+      firstName: contact.name?.firstName ?? '',
+      lastName: contact.name?.lastName ?? '',
+      email: contact.emails?.primaryEmail ?? '',
+    },
+    broker: {
+      name: application.brokerowner ?? '',
+      signature: application.brokerowner ?? '',
+    },
+    application: {
+      id: application.id,
+      applicationId: application.applicationid,
+      applicationType: normalizeEnum(application.applicationtype),
+      pipelineStage: normalizeEnum(application.pipelinestage),
+      borrowerName: application.borrowername ?? '',
+      loanPurpose: normalizeEnum(application.loanpurpose),
+      lenderTarget: application.lendertarget ?? '',
+      lvrBand: normalizeEnum(application.lvrband),
+      targetSettlementDate: application.targetsettlementdate ?? null,
+      occupancyType: normalizeEnum(application.occupancytype),
+      firstHomeBuyer: application.firsthomebuyer ?? false,
+      entityName: application.entityname ?? '',
+      entityType: normalizeEnum(application.entitytype),
+      abn: application.abn ?? '',
+      securityType: normalizeEnum(application.securitytype),
+      notesSummary: application.notessummary ?? '',
+      loanAmount: microsToAmount(application.loanamount?.amountMicros),
+      estimatedPropertyValue: microsToAmount(application.estimatedpropertyvalue?.amountMicros),
+      currencyCode: application.loanamount?.currencyCode ?? application.estimatedpropertyvalue?.currencyCode ?? 'AUD',
+    },
+    checklist: {
+      requiredSummary,
+      items: documents.map((item) => ({
+        label: item.documentLabel ?? 'Document',
+        required: item.required ?? false,
+        status: normalizeEnum(item.status) ?? '',
+        ownerRole: normalizeEnum(item.ownerrole),
+        notes: item.notes ?? '',
+        receivedAt: item.recievedat ?? null,
+        validatedAt: item.validatedat ?? null,
+      })),
+    },
+  };
+}
+
+function normalizeEnum(value?: string | null): string | null {
+  if (!value) return null;
+  return value.toLowerCase();
+}
+
+function microsToAmount(value?: number | null): number | null {
+  return value == null ? null : Math.floor(value / 1_000_000);
+}
+
+function hasPendingRequiredDocuments(application: MortgageApplicationNode): boolean {
+  return (application.documents?.edges ?? []).some((edge) => {
+    const doc = edge.node;
+    if (!doc?.required) return false;
+    const status = (doc.status ?? '').toLowerCase();
+    return !['received', 'accepted', 'waived'].includes(status);
+  });
+}
+
+function isSubmittedLikeStage(stage?: string | null): boolean {
+  return ['SUBMITTED', 'CONDITIONAL_APPROVAL', 'FORMAL_APPROVAL', 'SETTLED'].includes(stage ?? '');
+}
+
+function rankMortgageApplication(application: MortgageApplicationNode): number {
+  const stage = application.pipelinestage ?? '';
+  const stageScore =
+    stage === 'SETTLED'
+      ? 10
+      : stage === 'FORMAL_APPROVAL'
+        ? 90
+        : stage === 'CONDITIONAL_APPROVAL'
+          ? 80
+          : stage === 'SUBMITTED'
+            ? 70
+            : stage === 'DOCS_COMPLETE'
+              ? 60
+              : stage === 'DOCS_REQUESTED'
+                ? 50
+                : 40;
+  const updated = application.updatedAt ? new Date(application.updatedAt).getTime() : 0;
+  return stageScore * 1_000_000_000_000 + updated;
+}
+
+function getString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }

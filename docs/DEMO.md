@@ -67,31 +67,28 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 ### E. Sync to listmonk
 1. In Mailer Studio click `Run Contact Sync`.
 2. In Mailer Studio click `Run List Sync`.
-3. Open listmonk and confirm the subscriber exists in the default mortgage list.
+3. Open listmonk and confirm the subscriber exists in:
+   - `CRM Contacts`
+   - the correct mortgage application-type segment list
+   - any stage-derived lists such as `Docs Pending`
 
-### F. Generate and send mortgage template draft
+### F. Launch Mailer Studio from CRM context
+1. From a browser or CRM nav action, open:
+   - `/studio/open/application/APP-001`
+2. Confirm Mailer Studio opens with:
+   - recipient email prefilled
+   - context JSON prefilled
+   - the recommended template selected
+
+### G. Generate and send mortgage template draft
 1. Stay in Mailer Studio.
-2. In `Template Studio`, choose a mortgage template, for example `Retail documents request`.
-3. Set `Recipient email` to the synced borrower email.
-4. Paste context JSON similar to:
-```json
-{
-  "contact": { "firstName": "Chris" },
-  "broker": { "name": "Broker Name", "signature": "Broker Name" },
-  "application": {
-    "applicationId": "APP-001",
-    "applicationType": "retail_home_loan",
-    "pipelineStage": "docs_requested",
-    "lenderTarget": "Example Lender"
-  },
-  "checklist": { "requiredSummary": "ID, bank statements, privacy consent" }
-}
-```
-5. Click `Preview Template`.
-6. Click `Send Template Test`.
-7. Open Mailpit and verify the email arrives.
+2. Use `Loan Application ID = APP-001` in the `CRM Quick Load` panel and click `Load Application`.
+3. Confirm the compose form is prefilled from Twenty.
+4. Click `Preview Template`.
+5. Click `Send Recommended`.
+6. Open Mailpit and verify the email arrives.
 
-### G. Prove engagement logging
+### H. Prove engagement logging
 1. Open the delivered email in Mailpit.
 2. Load the message body so the tracking pixel fires.
 3. Return to Mailer Studio and refresh engagement events.
@@ -163,6 +160,22 @@ curl -X POST http://localhost:4010/campaigns/send-template \
   }'
 ```
 
+### Pull live CRM context
+```bash
+curl http://localhost:4010/studio/context/application/APP-001 | jq .
+curl http://localhost:4010/studio/context/person/<twenty-person-id> | jq .
+curl -I http://localhost:4010/studio/open/application/APP-001
+```
+
+### Send recommended template for an application
+```bash
+curl -X POST http://localhost:4010/campaigns/send-for-application \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "applicationId":"APP-001"
+  }'
+```
+
 ### Application-aware template shortcuts
 ```bash
 verticals/mortgage_au/scripts/render_template_for_application.sh APP-001 retail_documents_request | jq .
@@ -194,5 +207,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://
 ## Talking points
 - Mortgage-specific assets remain isolated under `verticals/mortgage_au/`.
 - The connector core only gained a generic template loader/render/send path that future verticals can reuse.
+- CRM users can jump straight from a loan file or person into a prefilled Mailer Studio session instead of hand-building context JSON.
+- Segment-list sync is now derived from live mortgage application state and preserves multiple memberships per subscriber.
 - The current MVP still relies on manual Twenty custom-object setup because the self-hosted Twenty runtime rejects built-in system flat entities needed for app-managed custom-object sync.
 - The stable local CRM writeback path for MVP is `rest_note`; `workflow_webhook` remains available but depends on correct workflow configuration inside Twenty.

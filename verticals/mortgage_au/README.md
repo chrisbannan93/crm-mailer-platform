@@ -23,10 +23,16 @@ Restart connector after changing vertical.
 - Syncs people into the mortgage AU default list and segment lists.
 - Exposes mortgage-specific email templates for rendering/sending from Mailer Studio.
 - Carries `applicationId`, `applicationType`, and stage metadata through template rendering and engagement events when provided in context.
+- Derives segment membership from live Loan Application state instead of contact tags.
 
 Public/internal split:
 - public mortgage website: `http://localhost:4010/`
 - internal Mailer Studio: `http://localhost:4010/studio`
+
+CRM launch helpers:
+- `GET /studio/open/application/:applicationId`
+- `GET /studio/open/person/:personId`
+- `POST /campaigns/send-for-application`
 
 ## Twenty App Automation Status
 - `twenty-apps/mortgage-au/` now contains a code-managed Twenty app slice for `Loan Application` and `Application Document`.
@@ -58,6 +64,14 @@ verticals/mortgage_au/scripts/send_template_for_application.sh \
 ```
 
 Use these helpers to avoid hand-writing JSON for `/templates/email/render` or `/campaigns/send-template`.
+
+Or use the connector endpoint directly:
+
+```bash
+curl -X POST http://localhost:4010/campaigns/send-for-application \
+  -H 'Content-Type: application/json' \
+  -d '{"applicationId":"APP-001"}' | jq .
+```
 
 ## Demo Workspace Seeder
 

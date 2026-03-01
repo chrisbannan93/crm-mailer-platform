@@ -173,3 +173,49 @@ export type PublicLeadResult = {
   personId: string;
   noteId?: string;
 };
+
+export type StudioTemplateContext = {
+  contact: {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  broker: {
+    name?: string;
+    signature?: string;
+  };
+  application: {
+    id?: string;
+    applicationId?: string;
+    applicationType?: string | null;
+    pipelineStage?: string | null;
+    borrowerName?: string;
+    loanPurpose?: string | null;
+    lenderTarget?: string;
+    lvrBand?: string | null;
+    targetSettlementDate?: string | null;
+    occupancyType?: string | null;
+    firstHomeBuyer?: boolean;
+    entityName?: string;
+    entityType?: string | null;
+    abn?: string;
+    securityType?: string | null;
+    notesSummary?: string;
+    loanAmount?: number | null;
+    estimatedPropertyValue?: number | null;
+    currencyCode?: string;
+  };
+  checklist: {
+    requiredSummary?: string;
+    items: Array<{
+      label: string;
+      required: boolean;
+      status: string;
+      ownerRole?: string | null;
+      notes?: string;
+      receivedAt?: string | null;
+      validatedAt?: string | null;
+    }>;
+  };
+};

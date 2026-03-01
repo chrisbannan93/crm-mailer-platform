@@ -70,3 +70,15 @@
 - Why: A public site should create real CRM leads instead of acting as brochureware, and that behavior is useful for every future vertical.
 - Alternatives: Route public enquiries to email only, or hardcode mortgage-specific lead handling outside the connector.
 - Impact: The connector now exposes `POST /public/leads`, which creates a Twenty Person and attaches a CRM note describing the enquiry.
+
+### 2026-03-01 - Add generic CRM-to-Mailer Studio context launch endpoints
+- Status: Accepted
+- Why: Operators should be able to jump from CRM records into a prefilled mailer workflow without hand-copying IDs or rebuilding JSON context.
+- Alternatives: Keep Mailer Studio as a manual JSON tool, or implement a mortgage-only shortcut outside the connector.
+- Impact: The connector now exposes generic context lookup, deep-link, and recommended-send endpoints that any future vertical can reuse once it can map CRM records into template context.
+
+### 2026-03-01 - Upsert each subscriber once before segment-list reconciliation
+- Status: Accepted
+- Why: Repeated per-segment subscriber upserts were resetting list memberships in listmonk, leaving contacts subscribed only to the last processed segment.
+- Alternatives: Accept last-segment-only behavior, or duplicate vertical-specific listmonk logic outside the generic sync path.
+- Impact: The generic list sync now upserts each subscriber once, then adds all desired segment lists and reconciles removals separately, preserving multi-segment memberships for every vertical.

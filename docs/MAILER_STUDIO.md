@@ -11,6 +11,8 @@ What you get:
   - last list sync time
   - buttons to run contact sync / list sync
   - template preview/send for active vertical email templates
+  - CRM quick-load by Loan Application ID or Person ID
+  - recommended-template send for a live application
   - link to open listmonk UI
   - recent engagement events feed
   - URL-prefilled mortgage context from CRM links
@@ -58,6 +60,11 @@ The UI calls `GET /studio/status` and shows:
 - `GET /templates/email` lists template metadata for the active vertical
 - `POST /templates/email/render` renders a chosen template using supplied JSON context
 - `POST /campaigns/send-template` creates a listmonk test draft/send using the rendered template
+- `GET /studio/context/application/:applicationId` fetches live CRM context for a Loan Application
+- `GET /studio/context/person/:personId` fetches live CRM context for a Person
+- `GET /studio/open/application/:applicationId` deep-links from CRM into a prefilled Mailer Studio session
+- `GET /studio/open/person/:personId` deep-links from CRM into a prefilled Mailer Studio session
+- `POST /campaigns/send-for-application` chooses a recommended template and sends from live application context
 - when `application.applicationId` is present in the context, tracking URLs carry it through as engagement metadata
 - query params can prefill the operator UI:
   - `personId`
@@ -70,6 +77,17 @@ The UI calls `GET /studio/status` and shows:
   - `pipelineStage`
   - `applicationType`
   - `requiredSummary`
+
+### CRM Quick Load
+- Enter a `Loan Application ID` and click `Load Application` to pull live borrower, broker, stage, and checklist data into the compose form.
+- Enter a `Person ID` and click `Load Person` to pull the best available application context for that contact.
+- Click `Send Recommended` to use the current application stage to choose a suitable template automatically.
+
+Recommended mappings in the current mortgage MVP:
+- `docs_requested` -> `retail_documents_request` or `commercial_documents_request`
+- `lead_captured` / `discovery_booked` -> intake acknowledgement
+- `conditional_approval` / `formal_approval` -> submission confirmation
+- `settled` -> post-settlement welcome
 
 ### Public lead capture
 - `POST /public/leads` creates a Twenty Person plus a CRM note from the public website enquiry form

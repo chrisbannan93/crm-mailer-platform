@@ -220,6 +220,64 @@ describe('ConnectorService', () => {
     expect(listmonk.addSubscriberToLists).toHaveBeenCalledWith(42, [3]);
   });
 
+  it('preserves multiple segment memberships for one subscriber during list sync', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi
+        .fn()
+        .mockResolvedValueOnce({ id: 1, name: 'CRM Synced Contacts' })
+        .mockResolvedValueOnce({ id: 2, name: 'Retail' })
+        .mockResolvedValueOnce({ id: 3, name: 'Docs Pending' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 42 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
+      createCampaign: vi.fn(),
+      sendCampaignTest: vi.fn(),
+    };
+    const twenty = {
+      listContacts: vi.fn().mockResolvedValue({
+        contacts: [{ id: 'p1', email: 'a@example.com', firstName: 'Ava' }],
+      }),
+      listMortgageSegmentProfilesByEmail: vi
+        .fn()
+        .mockResolvedValue(new Map([['a@example.com', { segmentKeys: ['retail_home_loans', 'docs_pending'] }]])),
+      getContactByEmail: vi.fn(),
+      fetchPersonById: vi.fn(),
+      writeEngagement: vi.fn(),
+    };
+
+    const service = new ConnectorService({
+      config: { ...makeConfig(), vertical: 'mortgage_au' },
+      store: new MemoryStore(),
+      vertical: { ...vertical, name: 'mortgage_au' },
+      segments: [
+        {
+          key: 'retail_home_loans',
+          name: 'Retail',
+          listName: 'Retail',
+          rules: [{ field: 'segmentKeys', op: 'includes', value: 'retail_home_loans' }],
+        },
+        {
+          key: 'docs_pending',
+          name: 'Docs Pending',
+          listName: 'Docs Pending',
+          rules: [{ field: 'segmentKeys', op: 'includes', value: 'docs_pending' }],
+        },
+      ],
+      // @ts-expect-error partial mock shape is sufficient for test
+      twenty,
+      // @ts-expect-error partial mock shape is sufficient for test
+      listmonk,
+    });
+
+    await service.syncLists();
+
+    expect(listmonk.upsertSubscriber).toHaveBeenCalledTimes(1);
+    expect(listmonk.addSubscriberToLists).toHaveBeenCalledTimes(1);
+    expect(listmonk.addSubscriberToLists).toHaveBeenCalledWith(42, [2, 3]);
+  });
+
   it('validates and deduplicates listmonk webhook events before writing to Twenty', async () => {
     const twenty = {
       listContacts: vi.fn(),

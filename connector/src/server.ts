@@ -73,6 +73,44 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
     res.type('html').send(renderSidecarUi(config));
   });
 
+  app.get('/studio/context/application/:applicationId', async (req, res, next) => {
+    try {
+      const data = await service.getStudioContextForApplication(req.params.applicationId);
+      res.json({ ok: true, data, suggestedTemplateKey: service.recommendTemplateKey(data) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/studio/context/person/:personId', async (req, res, next) => {
+    try {
+      const data = await service.getStudioContextForPerson(req.params.personId);
+      res.json({ ok: true, data, suggestedTemplateKey: service.recommendTemplateKey(data) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/studio/open/application/:applicationId', async (req, res, next) => {
+    try {
+      const context = await service.getStudioContextForApplication(req.params.applicationId);
+      const templateKey = typeof req.query.template === 'string' ? req.query.template : undefined;
+      res.redirect(302, service.buildStudioLaunchUrl(context, templateKey));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/studio/open/person/:personId', async (req, res, next) => {
+    try {
+      const context = await service.getStudioContextForPerson(req.params.personId);
+      const templateKey = typeof req.query.template === 'string' ? req.query.template : undefined;
+      res.redirect(302, service.buildStudioLaunchUrl(context, templateKey));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/public/leads', async (req, res, next) => {
     try {
       const lead = publicLeadSchema.parse(getBody(req));
@@ -185,6 +223,26 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
         to,
         personId: typeof body.personId === 'string' ? body.personId : undefined,
         context,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/campaigns/send-for-application', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const applicationId = String(body.applicationId ?? '').trim();
+      if (!applicationId) {
+        res.status(400).json({ error: 'Missing `applicationId`' });
+        return;
+      }
+      const result = await service.sendTemplateForApplication({
+        applicationId,
+        templateKey: typeof body.templateKey === 'string' ? body.templateKey : undefined,
+        to: typeof body.to === 'string' ? body.to : undefined,
+        personId: typeof body.personId === 'string' ? body.personId : undefined,
       });
       res.json({ ok: true, data: result });
     } catch (error) {

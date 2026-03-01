@@ -13,6 +13,7 @@ import type {
   TwentyWebhookPayload,
   PublicLead,
   PublicLeadResult,
+  StudioTemplateContext,
   VerticalPack,
 } from './types.js';
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
@@ -38,6 +39,9 @@ export type ConnectorDeps = {
     getContactByEmail?(email: string): Promise<Record<string, unknown> | null>;
     fetchPersonById(id: string): Promise<Record<string, unknown>>;
     createPublicLead?(lead: PublicLead): Promise<PublicLeadResult>;
+    getStudioContextForApplication?(applicationId: string): Promise<StudioTemplateContext | null>;
+    getStudioContextForPerson?(personId: string): Promise<StudioTemplateContext | null>;
+    listMortgageSegmentProfilesByEmail?(): Promise<Map<string, { segmentKeys: string[] }>>;
     writeEngagement(event: EngagementEvent): Promise<void>;
   };
   listmonk: {
@@ -203,6 +207,86 @@ export class ConnectorService {
     return this.deps.twenty.createPublicLead(lead);
   }
 
+  async getStudioContextForApplication(applicationId: string): Promise<StudioTemplateContext> {
+    if (!this.deps.twenty.getStudioContextForApplication) {
+      throw new Error('Twenty application context lookup is not configured');
+    }
+    const context = await this.deps.twenty.getStudioContextForApplication(applicationId);
+    if (!context) {
+      throw new Error(`Loan Application not found: ${applicationId}`);
+    }
+    return context;
+  }
+
+  async getStudioContextForPerson(personId: string): Promise<StudioTemplateContext> {
+    if (!this.deps.twenty.getStudioContextForPerson) {
+      throw new Error('Twenty person context lookup is not configured');
+    }
+    const context = await this.deps.twenty.getStudioContextForPerson(personId);
+    if (!context) {
+      throw new Error(`Person not found: ${personId}`);
+    }
+    return context;
+  }
+
+  buildStudioLaunchUrl(context: StudioTemplateContext, templateKey?: string): string {
+    const params = new URLSearchParams();
+    if (context.contact.id) params.set('personId', context.contact.id);
+    if (context.contact.email) params.set('email', context.contact.email);
+    if (context.contact.firstName) params.set('firstName', context.contact.firstName);
+    if (context.application.applicationId) params.set('applicationId', context.application.applicationId);
+    if (context.application.applicationType) params.set('applicationType', context.application.applicationType);
+    if (context.application.pipelineStage) params.set('pipelineStage', context.application.pipelineStage);
+    if (context.application.lenderTarget) params.set('lenderTarget', context.application.lenderTarget);
+    if (context.broker.name) params.set('brokerName', context.broker.name);
+    if (context.checklist.requiredSummary) params.set('requiredSummary', context.checklist.requiredSummary);
+    params.set('template', templateKey ?? this.recommendTemplateKey(context));
+    return `/studio?${params.toString()}`;
+  }
+
+  recommendTemplateKey(context: StudioTemplateContext): string {
+    const applicationType = context.application.applicationType ?? '';
+    const stage = context.application.pipelineStage ?? '';
+
+    if (stage === 'docs_requested') {
+      return applicationType === 'commercial_loan' ? 'commercial_documents_request' : 'retail_documents_request';
+    }
+    if (stage === 'fact_find_complete') return 'fact_find_booking';
+    if (stage === 'settled') return 'post_settlement_welcome';
+    if (stage === 'conditional_approval' || stage === 'formal_approval') {
+      return applicationType === 'commercial_loan' ? 'commercial_submission_confirmation' : 'retail_submission_confirmation';
+    }
+    if (stage === 'lead_captured' || stage === 'discovery_booked') {
+      return applicationType === 'commercial_loan' ? 'commercial_intake_acknowledgement' : 'retail_intake_acknowledgement';
+    }
+    return applicationType === 'commercial_loan' ? 'commercial_cross_sell' : 'welcome_onboarding';
+  }
+
+  async sendTemplateForApplication(input: {
+    applicationId: string;
+    templateKey?: string;
+    to?: string;
+    personId?: string;
+  }): Promise<{ campaignId: number; testRecipient: string; templateKey: string; applicationId: string }> {
+    const context = await this.getStudioContextForApplication(input.applicationId);
+    const templateKey = input.templateKey ?? this.recommendTemplateKey(context);
+    const to = input.to ?? context.contact.email;
+    const personId = input.personId ?? context.contact.id;
+
+    if (!to) {
+      throw new Error(`Loan Application ${input.applicationId} has no contact email`);
+    }
+
+    const result = await this.sendTemplateCampaign({
+      templateKey,
+      to,
+      personId,
+      context,
+    });
+
+    return { ...result, applicationId: input.applicationId };
+  }
+
   async syncLists(): Promise<Array<{ id: number; name: string }>> {
     const defaultList = await this.bootstrapDefaultList();
     const segments = this.deps.segments ?? [];
@@ -216,6 +300,11 @@ export class ConnectorService {
       this.deps.store.setState('sync.contacts.lastRunAt', nowIso());
       return [defaultList];
     }
+
+    const segmentProfiles =
+      this.deps.vertical.name === 'mortgage_au' && this.deps.twenty.listMortgageSegmentProfilesByEmail
+        ? await this.deps.twenty.listMortgageSegmentProfilesByEmail()
+        : new Map<string, { segmentKeys: string[] }>();
 
     const segmentLists = await Promise.all(
       segments.map(async (segment) => ({
@@ -231,6 +320,7 @@ export class ConnectorService {
     );
 
     const desiredBySegment = new Map<string, Map<string, { contact: ContactRecord; subscriberId?: number }>>();
+    const desiredByEmail = new Map<string, { contact: ContactRecord; segmentKeys: string[] }>();
     for (const entry of segmentLists) {
       desiredBySegment.set(entry.segment.key, new Map());
     }
@@ -251,10 +341,23 @@ export class ConnectorService {
           skippedNoEmail += 1;
           continue;
         }
+        const profile = segmentProfiles.get(contact.email);
+        if (profile) {
+          contact.raw = {
+            ...(contact.raw ?? {}),
+            segmentKeys: profile.segmentKeys,
+          };
+        }
         considered += 1;
         for (const entry of segmentLists) {
           if (matchesSegment(entry.segment, contact)) {
             desiredBySegment.get(entry.segment.key)!.set(contact.email, { contact });
+            const existing = desiredByEmail.get(contact.email);
+            if (existing) {
+              if (!existing.segmentKeys.includes(entry.segment.key)) existing.segmentKeys.push(entry.segment.key);
+            } else {
+              desiredByEmail.set(contact.email, { contact, segmentKeys: [entry.segment.key] });
+            }
           }
         }
       }
@@ -270,21 +373,35 @@ export class ConnectorService {
     let adds = 0;
     let removes = 0;
 
+    const segmentListIdByKey = new Map(segmentLists.map((entry) => [entry.segment.key, entry.list.id]));
+
+    for (const [email, desired] of desiredByEmail.entries()) {
+      const attribs = buildSubscriberAttribs(this.deps.vertical, desired.contact);
+      const upsert = await this.deps.listmonk.upsertSubscriber({
+        contact: desired.contact,
+        listId: defaultList.id,
+        attribs,
+      });
+      const targetListIds = desired.segmentKeys
+        .map((segmentKey) => segmentListIdByKey.get(segmentKey))
+        .filter((value): value is number => typeof value === 'number');
+      if (targetListIds.length > 0) {
+        await this.deps.listmonk.addSubscriberToLists(upsert.subscriberId, targetListIds);
+      }
+
+      for (const segmentKey of desired.segmentKeys) {
+        nextSnapshot[segmentKey] ??= {};
+        nextSnapshot[segmentKey][email] = { subscriberId: upsert.subscriberId };
+      }
+    }
+
     for (const entry of segmentLists) {
       const segmentKey = entry.segment.key;
       const desiredMap = desiredBySegment.get(segmentKey) ?? new Map();
       const previousMap = previousSnapshot[segmentKey] ?? {};
-      nextSnapshot[segmentKey] = {};
+      nextSnapshot[segmentKey] ??= {};
 
-      for (const [email, desired] of desiredMap.entries()) {
-        const attribs = buildSubscriberAttribs(this.deps.vertical, desired.contact);
-        const upsert = await this.deps.listmonk.upsertSubscriber({
-          contact: desired.contact,
-          listId: defaultList.id,
-          attribs,
-        });
-        await this.deps.listmonk.addSubscriberToLists(upsert.subscriberId, [entry.list.id]);
-        nextSnapshot[segmentKey][email] = { subscriberId: upsert.subscriberId };
+      for (const email of desiredMap.keys()) {
         if (!(email in previousMap)) adds += 1;
       }
 
@@ -903,6 +1020,10 @@ function evaluateSegmentRule(
 }
 
 function readContactField(contact: ContactRecord, field: string): unknown {
+  if (field === 'segmentKeys') {
+    const raw = (contact.raw ?? {}) as Record<string, unknown>;
+    return Array.isArray(raw.segmentKeys) ? raw.segmentKeys : [];
+  }
   if (field === 'tags') return contact.tags ?? [];
   if (field === 'email') return contact.email;
   if (field === 'phone') return contact.phone;

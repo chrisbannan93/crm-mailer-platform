@@ -142,6 +142,14 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
     }
   });
 
+  app.get('/studio/dashboard', async (_req, res, next) => {
+    try {
+      res.json({ ok: true, data: await service.getStudioDashboard() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/lists', async (_req, res, next) => {
     try {
       res.json({ data: await service.listLists() });
@@ -243,6 +251,38 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
         templateKey: typeof body.templateKey === 'string' ? body.templateKey : undefined,
         to: typeof body.to === 'string' ? body.to : undefined,
         personId: typeof body.personId === 'string' ? body.personId : undefined,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/docs-chase', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const applicationIds = Array.isArray(body.applicationIds) ? body.applicationIds.map(String) : undefined;
+      const result = await service.runDocsChaseWorkflow({
+        applicationIds,
+        limit: typeof body.limit === 'number' ? body.limit : undefined,
+        createTasks: typeof body.createTasks === 'boolean' ? body.createTasks : undefined,
+        sendEmail: typeof body.sendEmail === 'boolean' ? body.sendEmail : undefined,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/review-sweep', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const applicationIds = Array.isArray(body.applicationIds) ? body.applicationIds.map(String) : undefined;
+      const result = await service.runReviewSweepWorkflow({
+        applicationIds,
+        limit: typeof body.limit === 'number' ? body.limit : undefined,
+        createTasks: typeof body.createTasks === 'boolean' ? body.createTasks : undefined,
+        sendEmail: typeof body.sendEmail === 'boolean' ? body.sendEmail : undefined,
       });
       res.json({ ok: true, data: result });
     } catch (error) {

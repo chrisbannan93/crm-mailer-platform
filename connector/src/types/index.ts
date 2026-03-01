@@ -219,3 +219,53 @@ export type StudioTemplateContext = {
     }>;
   };
 };
+
+export type StudioDashboardMetric = {
+  key: string;
+  label: string;
+  value: number;
+  detail?: string;
+};
+
+export type StudioDashboardApplicationRow = {
+  applicationId: string;
+  personId?: string;
+  borrowerName: string;
+  email?: string;
+  applicationType?: string | null;
+  pipelineStage?: string | null;
+  lenderTarget?: string;
+  pendingRequiredDocs: number;
+  recommendedTemplateKey: string;
+  targetSettlementDate?: string | null;
+};
+
+export type StudioWorkflowQueue = {
+  key: string;
+  label: string;
+  count: number;
+  applications: StudioDashboardApplicationRow[];
+};
+
+export type StudioDashboard = {
+  metrics: StudioDashboardMetric[];
+  pipeline: Array<{ key: string; label: string; count: number }>;
+  attention: StudioDashboardApplicationRow[];
+  workflows: StudioWorkflowQueue[];
+};
+
+export type StudioWorkflowRunResult = {
+  workflowKey: string;
+  processed: number;
+  taskCount: number;
+  sentCount: number;
+  skippedCount: number;
+  results: Array<{
+    applicationId: string;
+    action: 'sent' | 'task' | 'sent_and_task' | 'skipped';
+    templateKey?: string;
+    reason?: string;
+    taskId?: string;
+    campaignId?: number;
+  }>;
+};

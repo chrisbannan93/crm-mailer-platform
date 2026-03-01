@@ -6,6 +6,7 @@ Mailer Studio is the internal operator UI for this platform. It is hosted by the
 What you get:
 - `Mailer Studio` nav item in Twenty (official Twenty apps alpha extension path)
 - connector-hosted UI with:
+  - live mortgage portfolio dashboard
   - connection status (Twenty + listmonk)
   - last contact sync time
   - last list sync time
@@ -13,6 +14,7 @@ What you get:
   - template preview/send for active vertical email templates
   - CRM quick-load by Loan Application ID or Person ID
   - recommended-template send for a live application
+  - stage-aware workflow actions (`docs chase`, `review sweep`)
   - link to open listmonk UI
   - recent engagement events feed
   - URL-prefilled mortgage context from CRM links
@@ -56,6 +58,17 @@ The UI calls `GET /studio/status` and shows:
 - `Run Contact Sync` -> `POST /sync/contacts`
 - `Run List Sync` -> `POST /sync/lists`
 
+### Portfolio dashboard
+- `GET /studio/dashboard` returns:
+  - portfolio metrics
+  - pipeline-stage distribution
+  - attention queue
+  - workflow candidate queues
+- the dashboard is mortgage-aware when `VERTICAL=mortgage_au`
+- queue items can:
+  - load live application context into Template Studio
+  - open a prefilled `/studio/open/application/:applicationId` route
+
 ### Template Studio
 - `GET /templates/email` lists template metadata for the active vertical
 - `POST /templates/email/render` renders a chosen template using supplied JSON context
@@ -88,6 +101,20 @@ Recommended mappings in the current mortgage MVP:
 - `lead_captured` / `discovery_booked` -> intake acknowledgement
 - `conditional_approval` / `formal_approval` -> submission confirmation
 - `settled` -> post-settlement welcome
+
+### Workflow actions
+- `POST /workflows/docs-chase`
+  - selects applications with required documents still pending
+  - sends documents-request emails
+  - creates follow-up tasks in Twenty when no matching open task exists
+- `POST /workflows/review-sweep`
+  - selects settled applications old enough for a review touchpoint
+  - sends `annual_review_invite` for retail files
+  - sends `commercial_cross_sell` for commercial files
+  - creates review tasks in Twenty
+
+Current limitation:
+- deep-link routes are in place, but true record-page action buttons inside Twenty still depend on broader Twenty app/runtime support than this self-hosted stack currently exposes
 
 ### Public lead capture
 - `POST /public/leads` creates a Twenty Person plus a CRM note from the public website enquiry form

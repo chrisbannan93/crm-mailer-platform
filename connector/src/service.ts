@@ -13,7 +13,9 @@ import type {
   TwentyWebhookPayload,
   PublicLead,
   PublicLeadResult,
+  StudioDashboard,
   StudioTemplateContext,
+  StudioWorkflowRunResult,
   VerticalPack,
 } from './types.js';
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
@@ -41,7 +43,18 @@ export type ConnectorDeps = {
     createPublicLead?(lead: PublicLead): Promise<PublicLeadResult>;
     getStudioContextForApplication?(applicationId: string): Promise<StudioTemplateContext | null>;
     getStudioContextForPerson?(personId: string): Promise<StudioTemplateContext | null>;
+    getMortgageDashboard?(): Promise<StudioDashboard>;
     listMortgageSegmentProfilesByEmail?(): Promise<Map<string, { segmentKeys: string[] }>>;
+    listOpenTaskTitles?(): Promise<string[]>;
+    getDefaultAssigneeId?(): Promise<string | undefined>;
+    createWorkflowTask?(input: {
+      title: string;
+      bodyMarkdown: string;
+      assigneeId: string;
+      dueAt: string;
+      personId?: string;
+      loanApplicationId?: string;
+    }): Promise<string>;
     writeEngagement(event: EngagementEvent): Promise<void>;
   };
   listmonk: {
@@ -229,6 +242,13 @@ export class ConnectorService {
     return context;
   }
 
+  async getStudioDashboard(): Promise<StudioDashboard> {
+    if (!this.deps.twenty.getMortgageDashboard) {
+      throw new Error('Twenty mortgage dashboard is not configured');
+    }
+    return this.deps.twenty.getMortgageDashboard();
+  }
+
   buildStudioLaunchUrl(context: StudioTemplateContext, templateKey?: string): string {
     const params = new URLSearchParams();
     if (context.contact.id) params.set('personId', context.contact.id);
@@ -285,6 +305,50 @@ export class ConnectorService {
     });
 
     return { ...result, applicationId: input.applicationId };
+  }
+
+  async runDocsChaseWorkflow(input?: {
+    applicationIds?: string[];
+    limit?: number;
+    createTasks?: boolean;
+    sendEmail?: boolean;
+  }): Promise<StudioWorkflowRunResult> {
+    const dashboard = await this.getStudioDashboard();
+    const selected = selectWorkflowRows(dashboard.workflows.find((item) => item.key === 'docs_chase')?.applications ?? [], input?.applicationIds, input?.limit ?? 6);
+    return this.runWorkflowRows({
+      workflowKey: 'docs_chase',
+      rows: selected,
+      createTasks: input?.createTasks !== false,
+      sendEmail: input?.sendEmail !== false,
+      templateKeyForRow: (row) => (row.applicationType === 'commercial_loan' ? 'commercial_documents_request' : 'retail_documents_request'),
+      buildTaskTitle: (row) => `${row.applicationId} Chase missing documents`,
+      buildTaskBody: (context) =>
+        `Follow up on missing checklist items for ${context.application.applicationId}.\n\nOutstanding docs: ${
+          context.checklist.requiredSummary || 'See checklist'
+        }.`,
+    });
+  }
+
+  async runReviewSweepWorkflow(input?: {
+    applicationIds?: string[];
+    limit?: number;
+    createTasks?: boolean;
+    sendEmail?: boolean;
+  }): Promise<StudioWorkflowRunResult> {
+    const dashboard = await this.getStudioDashboard();
+    const selected = selectWorkflowRows(dashboard.workflows.find((item) => item.key === 'review_sweep')?.applications ?? [], input?.applicationIds, input?.limit ?? 6);
+    return this.runWorkflowRows({
+      workflowKey: 'review_sweep',
+      rows: selected,
+      createTasks: input?.createTasks !== false,
+      sendEmail: input?.sendEmail !== false,
+      templateKeyForRow: (row) => (row.applicationType === 'commercial_loan' ? 'commercial_cross_sell' : 'annual_review_invite'),
+      buildTaskTitle: (row) => `${row.applicationId} Schedule annual review`,
+      buildTaskBody: (context) =>
+        `Reach out to ${context.application.borrowerName || context.contact.firstName || 'borrower'} for a portfolio review on ${
+          context.application.applicationId
+        }.`,
+    });
   }
 
   async syncLists(): Promise<Array<{ id: number; name: string }>> {
@@ -793,6 +857,107 @@ export class ConnectorService {
 
     return `${baseHtml}<img src="${openUrl.toString()}" alt=\"\" width=\"1\" height=\"1\" />`;
   }
+
+  private async runWorkflowRows(input: {
+    workflowKey: string;
+    rows: Array<{
+      applicationId: string;
+      personId?: string;
+      applicationType?: string | null;
+      recommendedTemplateKey: string;
+    }>;
+    createTasks: boolean;
+    sendEmail: boolean;
+    templateKeyForRow?(row: { applicationId: string; personId?: string; applicationType?: string | null; recommendedTemplateKey: string }): string;
+    buildTaskTitle(row: { applicationId: string }): string;
+    buildTaskBody(context: StudioTemplateContext): string;
+  }): Promise<StudioWorkflowRunResult> {
+    const existingTaskTitles = new Set(await (this.deps.twenty.listOpenTaskTitles?.() ?? Promise.resolve([])));
+    const assigneeId = input.createTasks ? await this.deps.twenty.getDefaultAssigneeId?.() : undefined;
+    const results: StudioWorkflowRunResult['results'] = [];
+    let taskCount = 0;
+    let sentCount = 0;
+    let skippedCount = 0;
+
+    for (const row of input.rows) {
+      const context = await this.getStudioContextForApplication(row.applicationId);
+      const taskTitle = input.buildTaskTitle(row);
+      let taskId: string | undefined;
+      let campaignId: number | undefined;
+      let templateKey: string | undefined;
+      let skipped = false;
+
+      if (input.createTasks && assigneeId && this.deps.twenty.createWorkflowTask) {
+        if (existingTaskTitles.has(taskTitle)) {
+          skipped = true;
+        } else {
+          taskId = await this.deps.twenty.createWorkflowTask({
+            title: taskTitle,
+            bodyMarkdown: input.buildTaskBody(context),
+            assigneeId,
+            dueAt: workflowDueAt(input.workflowKey),
+            personId: context.contact.id,
+            loanApplicationId: context.application.id,
+          });
+          existingTaskTitles.add(taskTitle);
+          taskCount += 1;
+        }
+      }
+
+      if (input.sendEmail && context.contact.email) {
+        templateKey = input.templateKeyForRow?.(row) ?? row.recommendedTemplateKey;
+        const sent = await this.sendTemplateCampaign({
+          templateKey,
+          to: context.contact.email,
+          personId: context.contact.id,
+          context,
+        });
+        campaignId = sent.campaignId;
+        sentCount += 1;
+      } else if (input.sendEmail) {
+        skipped = true;
+      }
+
+      const action = taskId && campaignId ? 'sent_and_task' : campaignId ? 'sent' : taskId ? 'task' : 'skipped';
+      if (action === 'skipped' || skipped) skippedCount += 1;
+      results.push({
+        applicationId: row.applicationId,
+        action,
+        templateKey,
+        taskId,
+        campaignId,
+        ...(action === 'skipped' ? { reason: 'existing task or no reachable email' } : {}),
+      });
+    }
+
+    this.deps.store.addEvent({
+      kind: 'sync',
+      status: 'ok',
+      message: `Workflow ${input.workflowKey} processed ${input.rows.length} applications`,
+      detail: { workflowKey: input.workflowKey, taskCount, sentCount, skippedCount },
+    });
+
+    return {
+      workflowKey: input.workflowKey,
+      processed: input.rows.length,
+      taskCount,
+      sentCount,
+      skippedCount,
+      results,
+    };
+  }
+}
+
+function workflowDueAt(workflowKey: string): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + (workflowKey === 'review_sweep' ? 7 : 2));
+  return date.toISOString();
+}
+
+function selectWorkflowRows<T extends { applicationId: string }>(rows: T[], applicationIds?: string[], limit = 6): T[] {
+  const requested = new Set((applicationIds ?? []).filter(Boolean));
+  if (requested.size > 0) return rows.filter((row) => requested.has(row.applicationId));
+  return rows.slice(0, limit);
 }
 
 const listmonkWebhookEventSchema = z.object({

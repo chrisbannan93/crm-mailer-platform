@@ -1,5 +1,11 @@
 import type { AppConfig } from '../config/env.js';
-import type { EngagementEvent, PublicLead, PublicLeadResult, StudioTemplateContext } from '../types/index.js';
+import type {
+  EngagementEvent,
+  PublicLead,
+  PublicLeadResult,
+  StudioDashboard,
+  StudioTemplateContext,
+} from '../types/index.js';
 
 export type TwentyContact = Record<string, unknown> & {
   id?: string;
@@ -61,6 +67,18 @@ type MortgageApplicationNode = {
 
 type MortgageSegmentProfile = {
   segmentKeys: string[];
+};
+
+type MortgageTaskNode = {
+  id?: string;
+  title?: string;
+  status?: string | null;
+  dueAt?: string | null;
+};
+
+type MortgageDashboardApp = {
+  context: StudioTemplateContext;
+  pendingRequiredDocs: number;
 };
 
 export class TwentyClientError extends Error {
@@ -185,6 +203,82 @@ export class TwentyClient {
     return new Map(
       Array.from(profiles.entries()).map(([email, segmentKeys]) => [email, { segmentKeys: Array.from(segmentKeys) }]),
     );
+  }
+
+  async getMortgageDashboard(): Promise<StudioDashboard> {
+    const applications = await this.listMortgageApplicationNodes();
+    const mapped = applications.map((application) => ({
+      context: mapMortgageApplicationNodeToContext(application),
+      pendingRequiredDocs: countPendingRequiredDocuments(application),
+    }));
+
+    const metrics = [
+      { key: 'total_applications', label: 'Loan Applications', value: mapped.length },
+      {
+        key: 'active_applications',
+        label: 'Active Files',
+        value: mapped.filter((item) => !['settled', 'closed_lost'].includes(item.context.application.pipelineStage ?? '')).length,
+      },
+      {
+        key: 'settled_applications',
+        label: 'Settled',
+        value: mapped.filter((item) => item.context.application.pipelineStage === 'settled').length,
+      },
+      {
+        key: 'docs_pending',
+        label: 'Docs Pending',
+        value: mapped.filter((item) => item.pendingRequiredDocs > 0).length,
+      },
+      {
+        key: 'submitted_plus',
+        label: 'Submitted+',
+        value: mapped.filter((item) => ['submitted', 'conditional_approval', 'formal_approval'].includes(item.context.application.pipelineStage ?? '')).length,
+      },
+      {
+        key: 'review_queue',
+        label: 'Review Queue',
+        value: mapped.filter((item) => isReviewCandidate(item.context)).length,
+      },
+    ];
+
+    const pipelineMap = new Map<string, number>();
+    for (const item of mapped) {
+      const stage = item.context.application.pipelineStage ?? 'unknown';
+      pipelineMap.set(stage, (pipelineMap.get(stage) ?? 0) + 1);
+    }
+
+    const workflowDocs = mapped
+      .filter((item) => isDocsChaseCandidate(item.context, item.pendingRequiredDocs))
+      .sort((left, right) => right.pendingRequiredDocs - left.pendingRequiredDocs || compareApplications(left.context, right.context));
+    const workflowReview = mapped
+      .filter((item) => isReviewCandidate(item.context))
+      .sort((left, right) => compareApplications(left.context, right.context));
+
+    return {
+      metrics,
+      pipeline: Array.from(pipelineMap.entries())
+        .map(([key, count]) => ({ key, label: prettifyEnum(key), count }))
+        .sort((left, right) => right.count - left.count),
+      attention: mapped
+        .filter((item) => item.pendingRequiredDocs > 0 || isSubmittedLikeStage((item.context.application.pipelineStage ?? '').toUpperCase()))
+        .sort((left, right) => right.pendingRequiredDocs - left.pendingRequiredDocs || compareApplications(left.context, right.context))
+        .slice(0, 8)
+        .map((item) => mapDashboardRow(item.context, item.pendingRequiredDocs)),
+      workflows: [
+        {
+          key: 'docs_chase',
+          label: 'Docs Chase',
+          count: workflowDocs.length,
+          applications: workflowDocs.slice(0, 6).map((item) => mapDashboardRow(item.context, item.pendingRequiredDocs)),
+        },
+        {
+          key: 'review_sweep',
+          label: 'Review Sweep',
+          count: workflowReview.length,
+          applications: workflowReview.slice(0, 6).map((item) => mapDashboardRow(item.context, item.pendingRequiredDocs)),
+        },
+      ],
+    };
   }
 
   async createPublicLead(lead: PublicLead): Promise<PublicLeadResult> {
@@ -483,6 +577,108 @@ export class TwentyClient {
     return (data.loanApplications?.edges ?? []).flatMap((edge) => (edge.node ? [edge.node] : []));
   }
 
+  private async listMortgageTasks(): Promise<MortgageTaskNode[]> {
+    const data = await this.graphqlRequest<{
+      tasks?: {
+        edges?: Array<{ node?: MortgageTaskNode }>;
+      };
+    }>(
+      `
+        query MortgageStudioTasks {
+          tasks {
+            edges {
+              node {
+                id
+                title
+                status
+                dueAt
+              }
+            }
+          }
+        }
+      `,
+    );
+    return (data.tasks?.edges ?? []).flatMap((edge) => (edge.node ? [edge.node] : []));
+  }
+
+  async listOpenTaskTitles(): Promise<string[]> {
+    const tasks = await this.listMortgageTasks();
+    return tasks
+      .filter((task) => !['DONE', 'CANCELED'].includes((task.status ?? '').toUpperCase()))
+      .map((task) => (task.title ?? '').trim())
+      .filter(Boolean);
+  }
+
+  async getDefaultAssigneeId(): Promise<string | undefined> {
+    const data = await this.graphqlRequest<{
+      workspaceMembers?: {
+        edges?: Array<{ node?: { id?: string } }>;
+      };
+    }>(
+      `
+        query MortgageStudioAssignee {
+          workspaceMembers {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+    );
+    return data.workspaceMembers?.edges?.[0]?.node?.id;
+  }
+
+  async createWorkflowTask(input: {
+    title: string;
+    bodyMarkdown: string;
+    assigneeId: string;
+    dueAt: string;
+    personId?: string;
+    loanApplicationId?: string;
+  }): Promise<string> {
+    const data = await this.graphqlRequest<{ createTask?: { id?: string } }>(
+      `
+        mutation CreateWorkflowTask($data: TaskCreateInput!) {
+          createTask(data: $data) {
+            id
+          }
+        }
+      `,
+      {
+        data: {
+          title: input.title,
+          status: 'TODO',
+          dueAt: input.dueAt,
+          bodyV2: this.buildRichText(input.bodyMarkdown),
+          assigneeId: input.assigneeId,
+        },
+      },
+    );
+    const taskId = data.createTask?.id;
+    if (!taskId) throw new Error('Twenty task creation did not return an id');
+
+    if (input.personId || input.loanApplicationId) {
+      await this.graphqlRequest(
+        `
+          mutation CreateWorkflowTaskTarget($data: TaskTargetCreateInput!) {
+            createTaskTarget(data: $data) { id }
+          }
+        `,
+        {
+          data: {
+            taskId,
+            ...(input.personId ? { targetPersonId: input.personId } : {}),
+            ...(input.loanApplicationId ? { targetLoanApplicationId: input.loanApplicationId } : {}),
+          },
+        },
+      );
+    }
+
+    return taskId;
+  }
+
   private getAuthToken(): string | undefined {
     return this.config.authToken || this.config.apiKey;
   }
@@ -579,6 +775,75 @@ function mapMortgageApplicationNodeToContext(application: MortgageApplicationNod
       })),
     },
   };
+}
+
+function mapDashboardRow(context: StudioTemplateContext, pendingRequiredDocs: number) {
+  return {
+    applicationId: context.application.applicationId ?? context.application.id ?? 'unknown',
+    personId: context.contact.id,
+    borrowerName: context.application.borrowerName ?? context.contact.firstName ?? 'Borrower',
+    email: context.contact.email,
+    applicationType: context.application.applicationType,
+    pipelineStage: context.application.pipelineStage,
+    lenderTarget: context.application.lenderTarget,
+    pendingRequiredDocs,
+    recommendedTemplateKey: recommendTemplateKeyFromContext(context),
+    targetSettlementDate: context.application.targetSettlementDate,
+  };
+}
+
+function countPendingRequiredDocuments(application: MortgageApplicationNode): number {
+  return (application.documents?.edges ?? []).filter((edge) => {
+    const doc = edge.node;
+    if (!doc?.required) return false;
+    const status = (doc.status ?? '').toLowerCase();
+    return !['received', 'accepted', 'waived'].includes(status);
+  }).length;
+}
+
+function compareApplications(left: StudioTemplateContext, right: StudioTemplateContext): number {
+  return (left.application.applicationId ?? '').localeCompare(right.application.applicationId ?? '');
+}
+
+function isDocsChaseCandidate(context: StudioTemplateContext, pendingRequiredDocs: number): boolean {
+  return pendingRequiredDocs > 0 && ['docs_requested', 'fact_find_complete', 'docs_complete'].includes(context.application.pipelineStage ?? '');
+}
+
+function isReviewCandidate(context: StudioTemplateContext): boolean {
+  if (context.application.pipelineStage !== 'settled') return false;
+  const settlementDate = context.application.targetSettlementDate;
+  if (!settlementDate) return true;
+  const days = Math.floor((Date.now() - new Date(settlementDate).getTime()) / (1000 * 60 * 60 * 24));
+  return days >= 30;
+}
+
+function prettifyEnum(value: string): string {
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function selectWorkflowCandidates(candidates: MortgageDashboardApp[], requestedIds: string[] | undefined, limit: number): MortgageDashboardApp[] {
+  const requested = new Set((requestedIds ?? []).filter(Boolean));
+  if (requested.size > 0) {
+    return candidates.filter((item) => requested.has(item.context.application.applicationId ?? '') || requested.has(item.context.application.id ?? ''));
+  }
+  return candidates.slice(0, limit);
+}
+
+function recommendTemplateKeyFromContext(context: StudioTemplateContext): string {
+  const applicationType = context.application.applicationType ?? '';
+  const stage = context.application.pipelineStage ?? '';
+  if (stage === 'docs_requested') {
+    return applicationType === 'commercial_loan' ? 'commercial_documents_request' : 'retail_documents_request';
+  }
+  if (stage === 'fact_find_complete') return 'fact_find_booking';
+  if (stage === 'settled') return applicationType === 'commercial_loan' ? 'commercial_cross_sell' : 'annual_review_invite';
+  if (stage === 'conditional_approval' || stage === 'formal_approval') {
+    return applicationType === 'commercial_loan' ? 'commercial_submission_confirmation' : 'retail_submission_confirmation';
+  }
+  if (stage === 'lead_captured' || stage === 'discovery_booked') {
+    return applicationType === 'commercial_loan' ? 'commercial_intake_acknowledgement' : 'retail_intake_acknowledgement';
+  }
+  return applicationType === 'commercial_loan' ? 'commercial_cross_sell' : 'welcome_onboarding';
 }
 
 function normalizeEnum(value?: string | null): string | null {

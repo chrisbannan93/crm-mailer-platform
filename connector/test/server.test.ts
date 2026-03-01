@@ -59,6 +59,9 @@ function makeServiceMock() {
     sendTestCampaign: vi.fn(),
     sendTemplateCampaign: vi.fn(),
     sendTemplateForApplication: vi.fn(),
+    getStudioDashboard: vi.fn().mockResolvedValue({ metrics: [], pipeline: [], attention: [], workflows: [] }),
+    runDocsChaseWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'docs_chase', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
+    runReviewSweepWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'review_sweep', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
     recordEngagement: vi.fn(),
     createPublicLead: vi.fn(),
     getStudioContextForApplication: vi.fn(),
@@ -164,5 +167,40 @@ describe('server', () => {
     expect(service.sendTemplateForApplication).toHaveBeenCalledWith(
       expect.objectContaining({ applicationId: 'APP-001' }),
     );
+  });
+
+  it('returns dashboard snapshot', async () => {
+    const service = makeServiceMock();
+    service.getStudioDashboard.mockResolvedValue({
+      metrics: [{ key: 'active', label: 'Active Files', value: 18 }],
+      pipeline: [],
+      attention: [],
+      workflows: [],
+    });
+
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).get('/studio/dashboard');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(service.getStudioDashboard).toHaveBeenCalled();
+  });
+
+  it('runs docs chase workflow', async () => {
+    const service = makeServiceMock();
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).post('/workflows/docs-chase').send({ limit: 5 });
+
+    expect(res.status).toBe(200);
+    expect(service.runDocsChaseWorkflow).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+  });
+
+  it('runs review sweep workflow', async () => {
+    const service = makeServiceMock();
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).post('/workflows/review-sweep').send({ limit: 3 });
+
+    expect(res.status).toBe(200);
+    expect(service.runReviewSweepWorkflow).toHaveBeenCalledWith(expect.objectContaining({ limit: 3 }));
   });
 });

@@ -69,6 +69,15 @@ export function renderSidecarUi(config: AppConfig): string {
     .metric:first-of-type { border-top: 0; padding-top: 0; }
     .metric .k { color: var(--muted); font-size: 13px; }
     .metric .v { font-weight: 600; font-size: 13px; text-align:right; }
+    .metricCards { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; }
+    .metricCard { background:#fff; border:1px solid #e6dfcf; border-radius:12px; padding:12px; }
+    .metricCard .label { font-size:12px; color:var(--muted); }
+    .metricCard .value { font-size:26px; font-weight:700; margin-top:4px; }
+    .queueList { display:grid; gap:8px; margin-top:10px; }
+    .queueItem { border:1px solid #e6dfcf; background:#fff; border-radius:12px; padding:10px; }
+    .queueItem .title { font-weight:600; font-size:13px; }
+    .queueItem .meta { font-size:12px; color:var(--muted); margin-top:4px; }
+    .queueItem .actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
     button, a.btn {
       border: 0;
       border-radius: 10px;
@@ -190,6 +199,21 @@ export function renderSidecarUi(config: AppConfig): string {
       </section>
 
       <section class="panel col-8">
+        <h2>Portfolio Dashboard</h2>
+        <div id="dashboardMetrics" class="metricCards"></div>
+        <div class="grid" style="margin-top:12px;">
+          <div class="col-6">
+            <h2 style="margin-bottom:8px;">Attention Queue</h2>
+            <div id="attentionQueue" class="queueList"></div>
+          </div>
+          <div class="col-6">
+            <h2 style="margin-bottom:8px;">Pipeline Mix</h2>
+            <div id="pipelineQueue" class="queueList"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel col-8">
         <h2>Template Studio</h2>
         <div class="metric"><span class="k">Active vertical</span><span class="v mono">${config.vertical}</span></div>
         <label class="small" for="templateSelect">Email template</label>
@@ -238,7 +262,18 @@ export function renderSidecarUi(config: AppConfig): string {
         <p class="small" style="margin-top:10px;">These actions fetch live Twenty context and prefill the compose form without hand-editing JSON.</p>
       </section>
 
-      <section class="panel col-8">
+      <section class="panel col-4">
+        <h2>Workflow Actions</h2>
+        <p class="small">Run stage-aware mortgage workflows against the current attention queues.</p>
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="refreshDashboardBtn" class="ghost">Refresh Dashboard</button>
+          <button id="docsChaseBtn" class="secondary">Run Docs Chase</button>
+          <button id="reviewSweepBtn" class="secondary">Run Review Sweep</button>
+        </div>
+        <div id="workflowQueues" class="queueList" style="margin-top:12px;"></div>
+      </section>
+
+      <section class="panel col-4">
         <h2>Recent Engagement Events</h2>
         <div class="btnRow" style="margin-top:0; margin-bottom:10px;">
           <button id="refreshEngagementBtn" class="ghost">Refresh Engagement Events</button>
@@ -272,6 +307,9 @@ export function renderSidecarUi(config: AppConfig): string {
       $('loadApplicationBtn').disabled = v;
       $('loadPersonBtn').disabled = v;
       $('sendRecommendedBtn').disabled = v;
+      $('refreshDashboardBtn').disabled = v;
+      $('docsChaseBtn').disabled = v;
+      $('reviewSweepBtn').disabled = v;
     }
 
     function writeLog(value) {
@@ -398,6 +436,74 @@ export function renderSidecarUi(config: AppConfig): string {
       }
     }
 
+    function renderMetricCards(items) {
+      const root = $('dashboardMetrics');
+      root.innerHTML = '';
+      for (const item of (items || []).slice(0, 6)) {
+        const div = document.createElement('div');
+        div.className = 'metricCard';
+        div.innerHTML = '<div class="label">' + item.label + '</div><div class="value">' + item.value + '</div>' + (item.detail ? '<div class="small">' + item.detail + '</div>' : '');
+        root.appendChild(div);
+      }
+    }
+
+    function queueItemHtml(item, withLoad) {
+      const actions = withLoad
+        ? '<div class="actions"><button class="ghost js-load-app" data-app-id="' + item.applicationId + '">Load</button><button class="ghost js-open-app" data-app-id="' + item.applicationId + '">Open Studio</button></div>'
+        : '';
+      return '<div class="queueItem"><div class="title">' + item.applicationId + ' · ' + (item.borrowerName || 'Borrower') + '</div><div class="meta">' +
+        [item.applicationType, item.pipelineStage, item.lenderTarget, item.pendingRequiredDocs ? (item.pendingRequiredDocs + ' docs pending') : null].filter(Boolean).join(' · ') +
+        '</div>' + actions + '</div>';
+    }
+
+    function renderDashboardQueues(data) {
+      const attention = $('attentionQueue');
+      const pipeline = $('pipelineQueue');
+      const workflowQueues = $('workflowQueues');
+      attention.innerHTML = '';
+      pipeline.innerHTML = '';
+      workflowQueues.innerHTML = '';
+
+      const attentionItems = data.attention || [];
+      if (attentionItems.length === 0) {
+        attention.innerHTML = '<div class="queueItem"><div class="title">No urgent files</div><div class="meta">Run syncs to populate the dashboard.</div></div>';
+      } else {
+        attention.innerHTML = attentionItems.map((item) => queueItemHtml(item, true)).join('');
+      }
+
+      const pipelineItems = data.pipeline || [];
+      pipeline.innerHTML = pipelineItems.map((item) => '<div class="queueItem"><div class="title">' + item.label + '</div><div class="meta">' + item.count + ' applications</div></div>').join('');
+
+      const workflowItems = data.workflows || [];
+      workflowQueues.innerHTML = workflowItems.map((item) =>
+        '<div class="queueItem"><div class="title">' + item.label + '</div><div class="meta">' + item.count + ' candidates</div></div>'
+      ).join('');
+
+      rootBindDashboardActions();
+    }
+
+    function rootBindDashboardActions() {
+      document.querySelectorAll('.js-load-app').forEach((button) => {
+        button.onclick = () => {
+          $('contextApplicationId').value = button.dataset.appId || '';
+          wrapAction('load-application-context', loadApplicationContext);
+        };
+      });
+      document.querySelectorAll('.js-open-app').forEach((button) => {
+        button.onclick = () => {
+          const appId = button.dataset.appId;
+          if (appId) window.open('/studio/open/application/' + encodeURIComponent(appId), '_blank');
+        };
+      });
+    }
+
+    async function refreshDashboard() {
+      const data = await api('/studio/dashboard');
+      renderMetricCards(data.data?.metrics || []);
+      renderDashboardQueues(data.data || {});
+      return data;
+    }
+
     async function refreshEngagementEvents() {
       const data = await api('/events/recent?kind=engagement&limit=20');
       renderEvents(data.data || []);
@@ -509,13 +615,27 @@ export function renderSidecarUi(config: AppConfig): string {
       });
     }
 
+    async function runDocsChaseWorkflow() {
+      return api('/workflows/docs-chase', {
+        method: 'POST',
+        body: JSON.stringify({ limit: 5 }),
+      });
+    }
+
+    async function runReviewSweepWorkflow() {
+      return api('/workflows/review-sweep', {
+        method: 'POST',
+        body: JSON.stringify({ limit: 5 }),
+      });
+    }
+
     async function wrapAction(label, fn) {
       if (busy) return;
       setBusy(true);
       try {
         const result = await fn();
         writeLog({ action: label, result });
-        await Promise.all([refreshStatus(), refreshEngagementEvents()]);
+        await Promise.all([refreshStatus(), refreshDashboard(), refreshEngagementEvents()]);
       } catch (err) {
         writeLog({ action: label, error: err && err.message ? err.message : String(err) });
       } finally {
@@ -533,12 +653,16 @@ export function renderSidecarUi(config: AppConfig): string {
     $('loadApplicationBtn').onclick = () => wrapAction('load-application-context', loadApplicationContext);
     $('loadPersonBtn').onclick = () => wrapAction('load-person-context', loadPersonContext);
     $('sendRecommendedBtn').onclick = () => wrapAction('send-recommended-template', sendRecommendedForApplication);
+    $('refreshDashboardBtn').onclick = () => wrapAction('refresh-dashboard', refreshDashboard);
+    $('docsChaseBtn').onclick = () => wrapAction('run-docs-chase', runDocsChaseWorkflow);
+    $('reviewSweepBtn').onclick = () => wrapAction('run-review-sweep', runReviewSweepWorkflow);
 
     applyPrefills();
     (async () => {
       try {
         await refreshStatus();
         await refreshTemplates();
+        await refreshDashboard();
         await refreshEngagementEvents();
       } catch (err) {
         writeLog(err && err.message ? err.message : String(err));

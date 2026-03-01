@@ -36,7 +36,12 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 2. Confirm the portfolio proof section and strategy-call lead form load.
 3. Open Mailer Studio at `http://localhost:4010/studio`.
 4. Confirm Twenty and listmonk indicators are green.
-5. Optionally confirm `make status` reports all HTTP services healthy.
+5. Confirm the dashboard shows:
+   - `27` loan applications
+   - `18` active files
+   - `9` settled
+   - populated attention/workflow queues
+6. Optionally confirm `make status` reports all HTTP services healthy.
 
 ### A1. Capture a public lead
 1. Submit the strategy-call form on `http://localhost:4010/`.
@@ -95,6 +100,17 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 4. Confirm a new `engagement` event appears.
 5. Open Twenty and confirm a new `Email engagement` note exists.
 6. Confirm the note body includes `applicationId: APP-001`.
+
+### I. Run workflows
+1. In Mailer Studio click `Run Docs Chase`.
+2. Confirm:
+   - doc-request emails are sent for queue candidates
+   - duplicate open tasks are not recreated
+3. Click `Run Review Sweep`.
+4. Confirm:
+   - review emails are sent
+   - follow-up tasks are created in Twenty
+5. Open Twenty Tasks and confirm new review tasks exist for settled files.
 
 ## Curl commands
 ### Health
@@ -167,6 +183,11 @@ curl http://localhost:4010/studio/context/person/<twenty-person-id> | jq .
 curl -I http://localhost:4010/studio/open/application/APP-001
 ```
 
+### Dashboard snapshot
+```bash
+curl http://localhost:4010/studio/dashboard | jq .
+```
+
 ### Send recommended template for an application
 ```bash
 curl -X POST http://localhost:4010/campaigns/send-for-application \
@@ -174,6 +195,17 @@ curl -X POST http://localhost:4010/campaigns/send-for-application \
   -d '{
     "applicationId":"APP-001"
   }'
+```
+
+### Run workflows
+```bash
+curl -X POST http://localhost:4010/workflows/docs-chase \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":2}' | jq .
+
+curl -X POST http://localhost:4010/workflows/review-sweep \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":2}' | jq .
 ```
 
 ### Application-aware template shortcuts
@@ -209,5 +241,6 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://
 - The connector core only gained a generic template loader/render/send path that future verticals can reuse.
 - CRM users can jump straight from a loan file or person into a prefilled Mailer Studio session instead of hand-building context JSON.
 - Segment-list sync is now derived from live mortgage application state and preserves multiple memberships per subscriber.
+- Mailer Studio now doubles as an operator dashboard with workflow queues, not just a send screen.
 - The current MVP still relies on manual Twenty custom-object setup because the self-hosted Twenty runtime rejects built-in system flat entities needed for app-managed custom-object sync.
 - The stable local CRM writeback path for MVP is `rest_note`; `workflow_webhook` remains available but depends on correct workflow configuration inside Twenty.

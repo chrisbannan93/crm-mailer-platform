@@ -33,6 +33,9 @@ CRM launch helpers:
 - `GET /studio/open/application/:applicationId`
 - `GET /studio/open/person/:personId`
 - `POST /campaigns/send-for-application`
+- `GET /studio/dashboard`
+- `POST /workflows/docs-chase`
+- `POST /workflows/review-sweep`
 
 ## Twenty App Automation Status
 - `twenty-apps/mortgage-au/` now contains a code-managed Twenty app slice for `Loan Application` and `Application Document`.
@@ -71,6 +74,18 @@ Or use the connector endpoint directly:
 curl -X POST http://localhost:4010/campaigns/send-for-application \
   -H 'Content-Type: application/json' \
   -d '{"applicationId":"APP-001"}' | jq .
+```
+
+Run the mortgage workflow helpers from the connector:
+
+```bash
+curl -X POST http://localhost:4010/workflows/docs-chase \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":3}' | jq .
+
+curl -X POST http://localhost:4010/workflows/review-sweep \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":3}' | jq .
 ```
 
 ## Demo Workspace Seeder

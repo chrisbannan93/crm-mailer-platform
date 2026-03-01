@@ -82,3 +82,9 @@
 - Why: Repeated per-segment subscriber upserts were resetting list memberships in listmonk, leaving contacts subscribed only to the last processed segment.
 - Alternatives: Accept last-segment-only behavior, or duplicate vertical-specific listmonk logic outside the generic sync path.
 - Impact: The generic list sync now upserts each subscriber once, then adds all desired segment lists and reconciles removals separately, preserving multi-segment memberships for every vertical.
+
+### 2026-03-01 - Add generic Studio dashboard and workflow endpoints
+- Status: Accepted
+- Why: Operators need a live portfolio view and stage-aware actions without leaving the connector UI or hand-querying Twenty.
+- Alternatives: Keep Mailer Studio as a thin send-only tool, or build mortgage-only workflow logic outside the connector.
+- Impact: The connector now exposes a generic dashboard shape plus workflow action endpoints; the mortgage vertical supplies the application-derived context that powers `docs chase` and `review sweep`.

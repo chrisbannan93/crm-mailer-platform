@@ -18,7 +18,6 @@ export function renderSidecarUi(config: AppConfig): string {
       --accent2: #1f6d5e;
       --danger: #b42318;
       --ok: #067647;
-      --warn: #b54708;
     }
     * { box-sizing: border-box; }
     body {
@@ -30,7 +29,7 @@ export function renderSidecarUi(config: AppConfig): string {
         radial-gradient(700px 350px at 100% 0%, #e8f6ff 0%, transparent 65%),
         var(--bg);
     }
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 22px; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 22px; }
     .hero {
       display: grid;
       grid-template-columns: 1.6fr 1fr;
@@ -47,7 +46,8 @@ export function renderSidecarUi(config: AppConfig): string {
     h1 { margin: 0; font-size: 30px; letter-spacing: -0.02em; }
     h2 { margin: 0 0 10px; font-size: 16px; }
     p { margin: 0; color: var(--muted); }
-    .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; }
+    .chips, .btnRow { display:flex; flex-wrap:wrap; gap:8px; }
+    .chips { margin-top: 12px; }
     .chip {
       display:inline-flex; align-items:center; gap:6px;
       padding: 6px 10px;
@@ -60,11 +60,7 @@ export function renderSidecarUi(config: AppConfig): string {
     .dot { width: 8px; height: 8px; border-radius: 50%; display:inline-block; }
     .dot.ok { background: #12b76a; }
     .dot.bad { background: #f04438; }
-    .grid {
-      display:grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 14px;
-    }
+    .grid { display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
     .col-4 { grid-column: span 4; }
     .col-6 { grid-column: span 6; }
     .col-8 { grid-column: span 8; }
@@ -73,7 +69,6 @@ export function renderSidecarUi(config: AppConfig): string {
     .metric:first-of-type { border-top: 0; padding-top: 0; }
     .metric .k { color: var(--muted); font-size: 13px; }
     .metric .v { font-weight: 600; font-size: 13px; text-align:right; }
-    .btnRow { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
     button, a.btn {
       border: 0;
       border-radius: 10px;
@@ -110,13 +105,7 @@ export function renderSidecarUi(config: AppConfig): string {
       border-radius: 12px;
       padding: 10px;
     }
-    .evtHead {
-      display:flex;
-      justify-content: space-between;
-      gap: 8px;
-      align-items: baseline;
-      margin-bottom: 6px;
-    }
+    .evtHead { display:flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 6px; }
     .evtMsg { font-weight: 600; font-size: 13px; }
     .evtMeta { font-size: 12px; color: var(--muted); }
     .evt pre {
@@ -140,6 +129,20 @@ export function renderSidecarUi(config: AppConfig): string {
       overflow: auto;
       font-size: 12px;
     }
+    .banner {
+      display:none;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid #d7cfbf;
+      background: #fff7ea;
+      color: #5f4428;
+      font-size: 13px;
+    }
+    input, select, textarea {
+      width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;
+    }
+    textarea { min-height:180px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
     @media (max-width: 900px) {
       .hero { grid-template-columns: 1fr; }
       .col-4, .col-6, .col-8 { grid-column: span 12; }
@@ -148,10 +151,11 @@ export function renderSidecarUi(config: AppConfig): string {
 </head>
 <body>
   <div class="wrap">
+    <div id="prefillBanner" class="banner"></div>
     <section class="hero">
       <div class="panel">
         <h1>Mailer Studio</h1>
-        <p>Minimal CRM + listmonk control panel for syncs, health checks, and engagement visibility. Active vertical: <strong>${config.vertical}</strong>.</p>
+        <p>Operator control panel for syncs, lifecycle sends, and engagement visibility. Active vertical: <strong>${config.vertical}</strong>.</p>
         <div class="chips">
           <span class="chip">Connector <span class="mono">:${config.port}</span></span>
           <span class="chip">Twenty <span class="mono">${config.twenty.baseUrl}</span></span>
@@ -163,8 +167,9 @@ export function renderSidecarUi(config: AppConfig): string {
         <h2>Connections</h2>
         <div id="connTwenty" class="statusLine"><span class="dot bad"></span>Twenty: checking…</div>
         <div id="connListmonk" class="statusLine"><span class="dot bad"></span>listmonk: checking…</div>
-        <div class="btnRow">
+        <div class="btnRow" style="margin-top:10px;">
           <button id="refreshStatusBtn" class="ghost">Refresh Status</button>
+          <a class="btn" href="/" target="_blank" rel="noreferrer">Open Public Site</a>
           <a class="btn" href="${config.listmonk.baseUrl}" target="_blank" rel="noreferrer">Open listmonk UI</a>
         </div>
       </div>
@@ -176,8 +181,8 @@ export function renderSidecarUi(config: AppConfig): string {
         <div class="metric"><span class="k">Last contact sync</span><span id="lastContactsSync" class="v">Never</span></div>
         <div class="metric"><span class="k">Last list sync</span><span id="lastListsSync" class="v">Never</span></div>
         <label class="small" for="contactSyncMax">Contact sync max (optional, 1-500)</label>
-        <input id="contactSyncMax" type="number" min="1" max="500" placeholder="500" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;" />
-        <div class="btnRow">
+        <input id="contactSyncMax" type="number" min="1" max="500" placeholder="500" />
+        <div class="btnRow" style="margin-top:10px;">
           <button id="contactSyncBtn" class="primary">Run Contact Sync</button>
           <button id="listSyncBtn" class="secondary">Run List Sync</button>
         </div>
@@ -188,37 +193,33 @@ export function renderSidecarUi(config: AppConfig): string {
         <h2>Template Studio</h2>
         <div class="metric"><span class="k">Active vertical</span><span class="v mono">${config.vertical}</span></div>
         <label class="small" for="templateSelect">Email template</label>
-        <select id="templateSelect" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;">
-          <option value="">Loading templates…</option>
-        </select>
+        <select id="templateSelect"><option value="">Loading templates…</option></select>
         <div class="grid" style="margin-top:10px;">
           <div class="col-6">
             <label class="small" for="templateRecipient">Recipient email</label>
-            <input id="templateRecipient" type="email" placeholder="borrower@example.com" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;" />
+            <input id="templateRecipient" type="email" placeholder="borrower@example.com" />
           </div>
           <div class="col-6">
             <label class="small" for="templatePersonId">Person ID (optional)</label>
-            <input id="templatePersonId" type="text" placeholder="Twenty person id" style="width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px;" />
+            <input id="templatePersonId" type="text" placeholder="Twenty person id" />
           </div>
         </div>
         <label class="small" for="templateContext" style="display:block; margin-top:10px;">Application context JSON</label>
-        <textarea id="templateContext" style="width:100%; min-height:180px; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:6px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;">{
+        <textarea id="templateContext">{
   "contact": { "firstName": "Chris" },
   "broker": { "name": "Broker Name", "signature": "Broker Name" },
   "application": {
     "applicationId": "APP-001",
     "applicationType": "retail_home_loan",
     "pipelineStage": "docs_requested",
-    "lenderTarget": "Example Lender",
-    "entityName": "Example Pty Ltd"
+    "lenderTarget": "Example Lender"
   },
   "checklist": { "requiredSummary": "ID, bank statements, privacy consent" }
 }</textarea>
-        <div class="btnRow">
+        <div class="btnRow" style="margin-top:10px;">
           <button id="previewTemplateBtn" class="ghost">Preview Template</button>
           <button id="sendTemplateBtn" class="secondary">Send Template Test</button>
         </div>
-        <p class="small" style="margin-top:10px;">Templates are loaded from the active vertical folder and rendered against the provided context.</p>
       </section>
 
       <section class="panel col-8">
@@ -240,6 +241,7 @@ export function renderSidecarUi(config: AppConfig): string {
   <script>
     const $ = (id) => document.getElementById(id);
     const logOut = $('logOut');
+    const params = new URLSearchParams(window.location.search);
     let busy = false;
 
     function setBusy(v) {
@@ -265,9 +267,7 @@ export function renderSidecarUi(config: AppConfig): string {
       const text = await res.text();
       let body;
       try { body = text ? JSON.parse(text) : {}; } catch { body = text; }
-      if (!res.ok) {
-        throw new Error((body && body.error) || text || ('HTTP ' + res.status));
-      }
+      if (!res.ok) throw new Error((body && body.error) || text || ('HTTP ' + res.status));
       return body;
     }
 
@@ -288,6 +288,63 @@ export function renderSidecarUi(config: AppConfig): string {
       }
     }
 
+    function applyPrefills() {
+      const banner = $('prefillBanner');
+      const personId = params.get('personId');
+      const email = params.get('email');
+      const template = params.get('template');
+      const applicationId = params.get('applicationId');
+      const firstName = params.get('firstName');
+      const brokerName = params.get('brokerName');
+      const lenderTarget = params.get('lenderTarget');
+      const pipelineStage = params.get('pipelineStage');
+      const applicationType = params.get('applicationType');
+      const requiredSummary = params.get('requiredSummary');
+      const messages = [];
+
+      if (email) {
+        $('templateRecipient').value = email;
+        messages.push('recipient email');
+      }
+      if (personId) {
+        $('templatePersonId').value = personId;
+        messages.push('person id');
+      }
+
+      const textarea = $('templateContext');
+      try {
+        const value = JSON.parse(textarea.value || '{}');
+        value.contact = value.contact || {};
+        value.broker = value.broker || {};
+        value.application = value.application || {};
+        value.checklist = value.checklist || {};
+        if (firstName) value.contact.firstName = firstName;
+        if (brokerName) {
+          value.broker.name = brokerName;
+          value.broker.signature = brokerName;
+        }
+        if (applicationId) value.application.applicationId = applicationId;
+        if (pipelineStage) value.application.pipelineStage = pipelineStage;
+        if (applicationType) value.application.applicationType = applicationType;
+        if (lenderTarget) value.application.lenderTarget = lenderTarget;
+        if (requiredSummary) value.checklist.requiredSummary = requiredSummary;
+        textarea.value = JSON.stringify(value, null, 2);
+        if (applicationId) messages.push('application context');
+      } catch {
+        // leave as-is
+      }
+
+      if (template) {
+        messages.push('template');
+        window.__prefillTemplate = template;
+      }
+
+      if (messages.length > 0) {
+        banner.style.display = 'block';
+        banner.textContent = 'Prefilled from CRM context: ' + messages.join(', ') + '.';
+      }
+    }
+
     async function refreshStatus() {
       const data = await api('/studio/status');
       setConnLine($('connTwenty'), 'Twenty', data.services?.twenty?.ok, data.services?.twenty?.detail);
@@ -301,16 +358,13 @@ export function renderSidecarUi(config: AppConfig): string {
       const root = $('engagementEvents');
       root.innerHTML = '';
       if (!Array.isArray(items) || items.length === 0) {
-        root.innerHTML = '<li class="evt"><div class="evtMsg">No events yet.</div><div class="evtMeta">Run syncs or webhook simulations to populate this feed.</div></li>';
+        root.innerHTML = '<li class="evt"><div class="evtMsg">No events yet.</div><div class="evtMeta">Run syncs or campaign actions to populate this feed.</div></li>';
         return;
       }
       for (const evt of items) {
         const li = document.createElement('li');
         li.className = 'evt';
-        const head = document.createElement('div');
-        head.className = 'evtHead';
-        head.innerHTML = '<div class="evtMsg">' + (evt.message || evt.kind) + '</div><div class="evtMeta">' + (evt.createdAt ? fmtTime(evt.createdAt) : '') + '</div>';
-        li.appendChild(head);
+        li.innerHTML = '<div class="evtHead"><div class="evtMsg">' + (evt.message || evt.kind) + '</div><div class="evtMeta">' + (evt.createdAt ? fmtTime(evt.createdAt) : '') + '</div></div>';
         const meta = document.createElement('div');
         meta.className = 'evtMeta';
         meta.textContent = [evt.kind, evt.status].filter(Boolean).join(' · ');
@@ -347,6 +401,7 @@ export function renderSidecarUi(config: AppConfig): string {
         const option = document.createElement('option');
         option.value = item.key;
         option.textContent = item.name + (item.trigger ? ' · ' + item.trigger : '');
+        if (window.__prefillTemplate && window.__prefillTemplate === item.key) option.selected = true;
         select.appendChild(option);
       }
     }
@@ -358,9 +413,7 @@ export function renderSidecarUi(config: AppConfig): string {
       return api(path, { method: 'POST' });
     }
 
-    async function runListSync() {
-      return api('/sync/lists', { method: 'POST' });
-    }
+    async function runListSync() { return api('/sync/lists', { method: 'POST' }); }
 
     function readTemplateContext() {
       const raw = $('templateContext').value.trim();
@@ -370,10 +423,7 @@ export function renderSidecarUi(config: AppConfig): string {
     async function previewTemplate() {
       return api('/templates/email/render', {
         method: 'POST',
-        body: JSON.stringify({
-          templateKey: $('templateSelect').value,
-          context: readTemplateContext(),
-        }),
+        body: JSON.stringify({ templateKey: $('templateSelect').value, context: readTemplateContext() }),
       });
     }
 
@@ -411,6 +461,7 @@ export function renderSidecarUi(config: AppConfig): string {
     $('previewTemplateBtn').onclick = () => wrapAction('preview-template', previewTemplate);
     $('sendTemplateBtn').onclick = () => wrapAction('send-template', sendTemplate);
 
+    applyPrefills();
     (async () => {
       try {
         await refreshStatus();

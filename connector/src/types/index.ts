@@ -123,3 +123,53 @@ export type RenderedEmailTemplate = {
   bodyHtml: string;
   bodyText?: string;
 };
+
+export type WebsiteMetric = {
+  label: string;
+  value: string;
+  detail?: string;
+};
+
+export type WebsiteTestimonial = {
+  quote: string;
+  name: string;
+  role: string;
+};
+
+export type WebsiteContent = {
+  name: string;
+  hero: {
+    eyebrow: string;
+    headline: string;
+    subheadline: string;
+    primaryCta: { label: string; href: string };
+    secondaryCta?: { label: string; href: string };
+  };
+  proof: {
+    headline: string;
+    metrics: WebsiteMetric[];
+    body?: string;
+  };
+  sections: Array<{
+    title: string;
+    body: string;
+    bullets?: string[];
+  }>;
+  testimonials: WebsiteTestimonial[];
+  footerNote?: string;
+};
+
+export type PublicLead = {
+  firstName: string;
+  lastName?: string;
+  email: string;
+  phone?: string;
+  loanType?: string;
+  message?: string;
+  source?: string;
+};
+
+export type PublicLeadResult = {
+  personId: string;
+  noteId?: string;
+};

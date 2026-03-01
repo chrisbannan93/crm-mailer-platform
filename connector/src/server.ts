@@ -4,8 +4,10 @@ import type { AppConfig } from './config.js';
 import { registerHealthRoutes, registerSyncRoutes, registerWebhookRoutes } from './routes/index.js';
 import { logger } from './logger.js';
 import { ConnectorService } from './service.js';
+import { renderPublicSite } from './publicSite.js';
 import { renderSidecarUi } from './ui.js';
 import { toTransparentGif } from './utils.js';
+import { z } from 'zod';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -17,7 +19,16 @@ function getBody(req: Request): Record<string, unknown> {
   return (req.body ?? {}) as Record<string, unknown>;
 }
 
-export function createServer(config: AppConfig, service: ConnectorService) {
+const publicLeadSchema = z.object({
+  firstName: z.string().trim().min(1),
+  lastName: z.string().trim().optional(),
+  email: z.string().trim().email(),
+  phone: z.string().trim().optional(),
+  loanType: z.string().trim().optional(),
+  message: z.string().trim().max(2000).optional(),
+});
+
+export function createServer(config: AppConfig, service: ConnectorService, publicSiteContent?: import('./types/index.js').WebsiteContent | null) {
   const app = express();
   const pixel = toTransparentGif();
 
@@ -51,7 +62,28 @@ export function createServer(config: AppConfig, service: ConnectorService) {
   registerWebhookRoutes(app, config, service);
 
   app.get('/', (_req, res) => {
+    if (publicSiteContent) {
+      res.type('html').send(renderPublicSite(publicSiteContent));
+      return;
+    }
+    res.redirect(302, '/studio');
+  });
+
+  app.get('/studio', (_req, res) => {
     res.type('html').send(renderSidecarUi(config));
+  });
+
+  app.post('/public/leads', async (req, res, next) => {
+    try {
+      const lead = publicLeadSchema.parse(getBody(req));
+      const result = await service.createPublicLead({
+        ...lead,
+        source: 'public-site',
+      });
+      res.status(201).json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/events/recent', (req, res) => {

@@ -1,6 +1,6 @@
 import { defineNavigationMenuItem } from 'twenty-sdk';
 
-const connectorUrl = process.env.MAILER_STUDIO_CONNECTOR_URL ?? 'http://localhost:4010';
+const connectorUrl = process.env.MAILER_STUDIO_CONNECTOR_URL ?? 'http://localhost:4010/studio';
 
 export default defineNavigationMenuItem({
   universalIdentifier: 'f4c92807-f6d6-451e-a95e-5d8df42b9dfe',

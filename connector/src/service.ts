@@ -11,6 +11,8 @@ import type {
   SegmentDefinition,
   SyncResult,
   TwentyWebhookPayload,
+  PublicLead,
+  PublicLeadResult,
   VerticalPack,
 } from './types.js';
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
@@ -35,6 +37,7 @@ export type ConnectorDeps = {
     listContacts(updatedSince?: string, pageCursor?: string): Promise<{ contacts: Array<Record<string, unknown>>; nextCursor?: string }>;
     getContactByEmail?(email: string): Promise<Record<string, unknown> | null>;
     fetchPersonById(id: string): Promise<Record<string, unknown>>;
+    createPublicLead?(lead: PublicLead): Promise<PublicLeadResult>;
     writeEngagement(event: EngagementEvent): Promise<void>;
   };
   listmonk: {
@@ -191,6 +194,13 @@ export class ConnectorService {
 
   async listLists() {
     return this.deps.listmonk.listLists();
+  }
+
+  async createPublicLead(lead: PublicLead): Promise<PublicLeadResult> {
+    if (!this.deps.twenty.createPublicLead) {
+      throw new Error('Twenty public lead capture is not configured');
+    }
+    return this.deps.twenty.createPublicLead(lead);
   }
 
   async syncLists(): Promise<Array<{ id: number; name: string }>> {

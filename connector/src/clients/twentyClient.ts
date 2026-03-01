@@ -1,5 +1,5 @@
 import type { AppConfig } from '../config/env.js';
-import type { EngagementEvent } from '../types/index.js';
+import type { EngagementEvent, PublicLead, PublicLeadResult } from '../types/index.js';
 
 export type TwentyContact = Record<string, unknown> & {
   id?: string;
@@ -80,6 +80,87 @@ export class TwentyClient {
     return this.request<Record<string, unknown>>(`${this.config.restPath}/people/${id}`);
   }
 
+  async createPublicLead(lead: PublicLead): Promise<PublicLeadResult> {
+    const created = await this.graphqlRequest<{ createPerson?: { id?: string } }>(
+      `
+        mutation CreatePublicLead($data: PersonCreateInput!) {
+          createPerson(data: $data) {
+            id
+          }
+        }
+      `,
+      {
+        data: {
+          name: {
+            firstName: lead.firstName,
+            ...(lead.lastName ? { lastName: lead.lastName } : {}),
+          },
+          emails: {
+            primaryEmail: lead.email,
+          },
+          ...(lead.phone
+            ? {
+                phones: {
+                  primaryPhoneNumber: lead.phone,
+                  primaryPhoneCountryCode: 'AU',
+                  primaryPhoneCallingCode: '+61',
+                },
+              }
+            : {}),
+          ...(lead.loanType ? { jobTitle: `${lead.loanType} enquiry` } : {}),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    );
+
+    const personId = created.createPerson?.id;
+    if (!personId) {
+      throw new Error('Twenty person creation did not return an id');
+    }
+
+    const note = await this.graphqlRequest<{ createNote?: { id?: string } }>(
+      `
+        mutation CreatePublicLeadNote($data: NoteCreateInput!) {
+          createNote(data: $data) {
+            id
+          }
+        }
+      `,
+      {
+        data: {
+          title: 'Website enquiry',
+          bodyV2: this.buildRichText(
+            [
+              'New website enquiry captured.',
+              '',
+              `- source: ${lead.source ?? 'public-site'}`,
+              `- email: ${lead.email}`,
+              ...(lead.phone ? [`- phone: ${lead.phone}`] : []),
+              ...(lead.loanType ? [`- loanType: ${lead.loanType}`] : []),
+              ...(lead.message ? [`- message: ${lead.message}`] : []),
+            ].join('\n'),
+          ),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    );
+
+    const noteId = note.createNote?.id;
+    if (noteId) {
+      await this.request(`${this.config.restPath}/noteTargets`, {
+        method: 'POST',
+        body: {
+          noteId,
+          targetPersonId: personId,
+        },
+      });
+    }
+
+    return { personId, noteId };
+  }
+
   async writeEngagement(event: EngagementEvent): Promise<void> {
     if (this.config.writebackMode === 'log') return;
 
@@ -140,15 +221,19 @@ export class TwentyClient {
 
     return {
       title: 'Email engagement',
-      bodyV2: {
-        markdown: bodyText,
-        blocknote: JSON.stringify([
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: bodyText }],
-          },
-        ]),
-      },
+      bodyV2: this.buildRichText(bodyText),
+    };
+  }
+
+  private buildRichText(bodyText: string): { markdown: string; blocknote: string } {
+    return {
+      markdown: bodyText,
+      blocknote: JSON.stringify([
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: bodyText }],
+        },
+      ]),
     };
   }
 
@@ -204,6 +289,16 @@ export class TwentyClient {
     } catch {
       return {} as T;
     }
+  }
+
+  private async graphqlRequest<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    return this.request<T>(this.config.graphqlPath, {
+      method: 'POST',
+      body: {
+        query,
+        ...(variables ? { variables } : {}),
+      },
+    });
   }
 
   private getAuthToken(): string | undefined {

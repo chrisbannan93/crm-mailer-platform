@@ -1,7 +1,7 @@
 # MAILER STUDIO
 
 ## Summary
-Mailer Studio is a minimal operator UI for this platform. It is hosted by the connector service and linked from Twenty using a small Twenty App nav item.
+Mailer Studio is the internal operator UI for this platform. It is hosted by the connector service at `/studio` and linked from Twenty using a small Twenty App nav item.
 
 What you get:
 - `Mailer Studio` nav item in Twenty (official Twenty apps alpha extension path)
@@ -13,11 +13,15 @@ What you get:
   - template preview/send for active vertical email templates
   - link to open listmonk UI
   - recent engagement events feed
+  - URL-prefilled mortgage context from CRM links
+
+The public lead-generation website is served separately from the same connector at `http://localhost:4010/`.
 
 ## Architecture Choice (Minimal / Isolated)
 This repo does **not** vendor or patch Twenty frontend source. To keep diffs small and upgrades simple:
 - Twenty UI change is isolated to `twenty-apps/mailer-studio-nav/` (nav item only)
-- Mailer Studio page is hosted in connector at `http://localhost:4010/`
+- Public website is hosted in connector at `http://localhost:4010/`
+- Mailer Studio is hosted in connector at `http://localhost:4010/studio`
 
 This uses Twenty's official apps mechanism (alpha) for nav integration while avoiding direct edits to the Twenty codebase.
 
@@ -29,11 +33,11 @@ This uses Twenty's official apps mechanism (alpha) for nav integration while avo
 ## Using Mailer Studio
 ### Prerequisites
 - Stack is running (`Twenty`, `listmonk`, `connector`)
-- Connector reachable at `http://localhost:4010`
+- Connector reachable at `http://localhost:4010/studio`
 
 ### Direct access (without Twenty nav app)
 Open:
-- `http://localhost:4010/`
+- `http://localhost:4010/studio`
 
 ### Via Twenty nav item (preferred)
 Install the nav app from `twenty-apps/mailer-studio-nav/` using the current Twenty Apps alpha workflow for your installed Twenty version.
@@ -55,6 +59,21 @@ The UI calls `GET /studio/status` and shows:
 - `POST /templates/email/render` renders a chosen template using supplied JSON context
 - `POST /campaigns/send-template` creates a listmonk test draft/send using the rendered template
 - when `application.applicationId` is present in the context, tracking URLs carry it through as engagement metadata
+- query params can prefill the operator UI:
+  - `personId`
+  - `email`
+  - `template`
+  - `applicationId`
+  - `firstName`
+  - `brokerName`
+  - `lenderTarget`
+  - `pipelineStage`
+  - `applicationType`
+  - `requiredSummary`
+
+### Public lead capture
+- `POST /public/leads` creates a Twenty Person plus a CRM note from the public website enquiry form
+- this is generic platform behavior and intentionally reusable for future verticals
 
 ### Recent engagement events
 The UI reads:
@@ -64,7 +83,7 @@ The UI reads:
 This environment does not auto-capture screenshots in docs. To capture screenshots for demos:
 
 1. Start the stack and connector.
-2. Open `http://localhost:4010/` (or open via Twenty nav item).
+2. Open `http://localhost:4010/studio` (or open via Twenty nav item).
 3. Ensure connection status is green for Twenty and listmonk.
 4. Run `Run Contact Sync` and `Run List Sync`.
 5. Use Template Studio to preview or send a vertical-owned email template.

@@ -1,0 +1,9 @@
+{
+  "key": "fixed_rate_expiry",
+  "name": "Fixed rate expiry review",
+  "audience": "customer_lifecycle",
+  "trigger": "fixed_rate_expiry",
+  "subject": "Your fixed rate review window is opening",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>Your fixed rate review window is approaching, which makes this a good time to compare retention, repricing, and refinance options.</p><p>Reply if you want us to prepare a comparison before the expiry lands.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nYour fixed rate review window is approaching. We can prepare a retention or refinance comparison before expiry.\n\nRegards,\n{{broker.signature}}"
+}

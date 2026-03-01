@@ -1,0 +1,9 @@
+{
+  "key": "annual_review_invite",
+  "name": "Annual review invite",
+  "audience": "customer_lifecycle",
+  "trigger": "annual_review",
+  "subject": "Time for your home loan review",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>It has been a good time to review your loan structure, rate position, and any changes to cash flow or goals.</p><p>If you would like, we can run a quick review and confirm whether there is any worthwhile action now.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nIt is time to review your loan structure, rate position, and any changes to your goals.\n\nRegards,\n{{broker.signature}}"
+}

@@ -1,0 +1,67 @@
+{
+  "name": "Harbour Lane Mortgage Advisory",
+  "hero": {
+    "eyebrow": "Australia mortgage broking, reimagined",
+    "headline": "A six-month lending book that looks organised, proactive, and referral-ready.",
+    "subheadline": "Illustrative mortgage-broking operating model for retail and commercial lending. Fast borrower comms, cleaner document control, and broker follow-up that does not slip through the cracks.",
+    "primaryCta": { "label": "Book a broker strategy call", "href": "#lead-form" },
+    "secondaryCta": { "label": "Open operator preview", "href": "/studio" }
+  },
+  "proof": {
+    "headline": "Illustrative six-month portfolio snapshot",
+    "body": "This demo environment is intentionally seeded to show what a focused mortgage practice can look like after the first six months of disciplined CRM, document follow-up, and lifecycle communication.",
+    "metrics": [
+      { "label": "Active loan applications", "value": "18", "detail": "11 retail and 7 commercial files in motion." },
+      { "label": "Pipeline value", "value": "$18.6m", "detail": "Purchase, refinance, investor, and commercial scenarios." },
+      { "label": "Settled in first 6 months", "value": "9", "detail": "Balanced between owner-occupied and commercial lending." },
+      { "label": "Client satisfaction", "value": "4.9/5", "detail": "Illustrative broker feedback shown for pitch/demo use." }
+    ]
+  },
+  "sections": [
+    {
+      "title": "Borrowers hear from the broker before they have to chase",
+      "body": "The operating model is built around stage-based communication. When a file moves, the borrower gets the right update, the broker sees the next task, and the CRM timeline stays readable.",
+      "bullets": [
+        "Retail home loan onboarding and document request journeys.",
+        "Commercial file updates for structure review, submission, and lender response.",
+        "Follow-up tasks tied to missing documents and key dates."
+      ]
+    },
+    {
+      "title": "Document control without spreadsheet drift",
+      "body": "Each application carries its own checklist, ownership, and status. Brokers and admins can see what is missing, what is already acceptable, and what is holding submission back.",
+      "bullets": [
+        "Checklist items stored against every loan application.",
+        "Broker reminders for incomplete items before submission.",
+        "Simple internal visibility across retail and commercial files."
+      ]
+    },
+    {
+      "title": "Lifecycle communication that protects the trail book",
+      "body": "The mailer side is not limited to a one-off campaign. The core library covers onboarding, nurture, review, refinance, cross-sell, and winback messaging so the book keeps compounding after settlement.",
+      "bullets": [
+        "Onboarding and first-90-day nurture.",
+        "Rate review, repricing, and fixed-rate expiry outreach.",
+        "Investor and commercial cross-sell sequences."
+      ]
+    }
+  ],
+  "testimonials": [
+    {
+      "quote": "Borrowers stopped asking us where their file was up to because the updates were already landing before the question came in.",
+      "name": "Sarah P.",
+      "role": "Illustrative retail client feedback"
+    },
+    {
+      "quote": "The checklist view made it obvious what my admin team owned and what I needed to chase personally before submission.",
+      "name": "Mark T.",
+      "role": "Illustrative broker feedback"
+    },
+    {
+      "quote": "Commercial borrowers responded well because the updates sounded specific to the file, not like generic bulk marketing.",
+      "name": "Olivia R.",
+      "role": "Illustrative client service lead feedback"
+    }
+  ],
+  "footerNote": "Demo environment for pitch and workflow review. Portfolio results and testimonials on this page are illustrative examples, not audited production claims."
+}

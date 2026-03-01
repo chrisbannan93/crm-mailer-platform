@@ -1,0 +1,9 @@
+{
+  "key": "referral_request",
+  "name": "Referral request",
+  "audience": "customer_lifecycle",
+  "trigger": "referral_request",
+  "subject": "If someone in your network needs a broker, send them our way",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>If you know someone who wants direct, organised mortgage advice, feel free to introduce us. We will take good care of them.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nIf you know someone who wants direct, organised mortgage advice, feel free to introduce us.\n\nRegards,\n{{broker.signature}}"
+}

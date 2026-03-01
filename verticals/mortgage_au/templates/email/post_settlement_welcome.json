@@ -1,0 +1,9 @@
+{
+  "key": "post_settlement_welcome",
+  "name": "Post-settlement welcome",
+  "audience": "customer_lifecycle",
+  "trigger": "post_settlement",
+  "subject": "Your loan has settled. Here is what happens next.",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>Congratulations on settlement for <strong>{{application.applicationId}}</strong>.</p><p>We will keep monitoring your lending position and contact you before any useful review points, rate changes, or restructure opportunities.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nCongratulations on settlement for {{application.applicationId}}. We will keep monitoring your lending position from here.\n\nRegards,\n{{broker.signature}}"
+}

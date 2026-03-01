@@ -1,0 +1,9 @@
+{
+  "key": "commercial_cross_sell",
+  "name": "Commercial lending cross-sell",
+  "audience": "customer_lifecycle",
+  "trigger": "cross_sell",
+  "subject": "Commercial lending support if your business is expanding",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>If the business is looking at premises, equipment, or working capital support this quarter, we can scope commercial lending options early and avoid last-minute structuring issues.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nIf the business is looking at premises, equipment, or working capital support, we can scope commercial lending options early.\n\nRegards,\n{{broker.signature}}"
+}

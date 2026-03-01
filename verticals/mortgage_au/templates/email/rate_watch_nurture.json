@@ -1,0 +1,9 @@
+{
+  "key": "rate_watch_nurture",
+  "name": "Rate watch nurture",
+  "audience": "customer_lifecycle",
+  "trigger": "rate_watch",
+  "subject": "A quick lending market update for you",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>We are monitoring lender policy and pricing changes that may affect files like yours.</p><p>If there is a meaningful repricing or refinance opportunity, we will flag it with a recommendation instead of generic noise.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nWe are monitoring lender policy and pricing changes that may affect your loan position.\n\nRegards,\n{{broker.signature}}"
+}

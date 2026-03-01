@@ -1,0 +1,9 @@
+{
+  "key": "welcome_onboarding",
+  "name": "Welcome to Harbour Lane",
+  "audience": "customer_lifecycle",
+  "trigger": "welcome_onboarding",
+  "subject": "Welcome to Harbour Lane, {{contact.firstName}}",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>Welcome to Harbour Lane. We have mapped your lending profile and will keep the process clear, proactive, and easy to follow from here.</p><p>Your lead broker is {{broker.name}} and your current focus file is <strong>{{application.applicationId}}</strong>.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nWelcome to Harbour Lane. Your broker is {{broker.name}} and your current file is {{application.applicationId}}.\n\nRegards,\n{{broker.signature}}"
+}

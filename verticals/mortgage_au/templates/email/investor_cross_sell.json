@@ -1,0 +1,9 @@
+{
+  "key": "investor_cross_sell",
+  "name": "Investor cross-sell",
+  "audience": "customer_lifecycle",
+  "trigger": "cross_sell",
+  "subject": "Investor lending options worth reviewing",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>If you are considering your next purchase or equity release strategy, we can map borrowing capacity and structure options before you start inspecting properties.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nIf you are considering your next purchase or equity release strategy, we can map your options before you start.\n\nRegards,\n{{broker.signature}}"
+}

@@ -1,0 +1,9 @@
+{
+  "key": "fact_find_booking",
+  "name": "Book your strategy call",
+  "audience": "customer_lifecycle",
+  "trigger": "fact_find_booking",
+  "subject": "Let's lock in your strategy session",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>The next step is a short strategy session so we can confirm structure, timing, and lender fit.</p><p>Reply with your preferred times this week and we will lock it in.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nThe next step is a short strategy session so we can confirm structure, timing, and lender fit.\n\nRegards,\n{{broker.signature}}"
+}

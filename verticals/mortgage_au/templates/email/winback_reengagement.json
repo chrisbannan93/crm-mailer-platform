@@ -1,0 +1,9 @@
+{
+  "key": "winback_reengagement",
+  "name": "Winback re-engagement",
+  "audience": "customer_lifecycle",
+  "trigger": "winback",
+  "subject": "Still open to reviewing your lending position?",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>We have not spoken in a while, but if your plans, rates, or funding needs have changed, we can revisit the file and outline practical next steps.</p><p>Reply if you want us to reopen the conversation.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nIf your plans, rates, or funding needs have changed, we can revisit the file and outline the next steps.\n\nRegards,\n{{broker.signature}}"
+}

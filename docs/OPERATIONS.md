@@ -241,6 +241,10 @@ Default ports:
 - `8025` / `1025` (Mailpit)
 - `5433` / `5434` (host DB access)
 
+Operator/public split:
+- public website: `http://localhost:4010/`
+- internal Mailer Studio: `http://localhost:4010/studio`
+
 Change host ports in `stack/.env`, then restart:
 ```bash
 make down
@@ -291,6 +295,25 @@ make test
 cd connector && npm run build
 ```
 - then restart stack: `make up`
+
+## Mortgage Demo Workspace
+
+To reseed the local Mortgage AU pitch/demo workspace with production-like records:
+
+```bash
+node verticals/mortgage_au/scripts/seed_demo_workspace.mjs
+```
+
+What it does:
+- clears the current demo people, loan applications, application documents, notes, tasks, and targets
+- recreates a 4-6 month mortgage book with:
+  - 27 people
+  - 27 loan applications
+  - 18 active files
+  - 9 settled files
+  - checklist rows, tasks, and notes tied to each file
+
+Use this only on the local demo workspace. It is intentionally destructive to the mortgage demo data set.
 
 ## Security / Secrets Handling
 - Secrets live in `.env` files only (`stack/.env`, `connector/.env`)

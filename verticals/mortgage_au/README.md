@@ -24,6 +24,10 @@ Restart connector after changing vertical.
 - Exposes mortgage-specific email templates for rendering/sending from Mailer Studio.
 - Carries `applicationId`, `applicationType`, and stage metadata through template rendering and engagement events when provided in context.
 
+Public/internal split:
+- public mortgage website: `http://localhost:4010/`
+- internal Mailer Studio: `http://localhost:4010/studio`
+
 ## Twenty App Automation Status
 - `twenty-apps/mortgage-au/` now contains a code-managed Twenty app slice for `Loan Application` and `Application Document`.
 - The package typechecks on Node 24 + Yarn 4.
@@ -54,6 +58,21 @@ verticals/mortgage_au/scripts/send_template_for_application.sh \
 ```
 
 Use these helpers to avoid hand-writing JSON for `/templates/email/render` or `/campaigns/send-template`.
+
+## Demo Workspace Seeder
+
+Create a realistic six-month mortgage book for pitches or local demos:
+
+```bash
+node verticals/mortgage_au/scripts/seed_demo_workspace.mjs
+```
+
+This resets the current mortgage demo workspace data and recreates:
+- people
+- loan applications
+- application documents
+- tasks
+- notes and timeline targets
 
 ## Files To Review First
 - `config/segments.json`

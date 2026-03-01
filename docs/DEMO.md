@@ -11,7 +11,8 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 - connector restarted after changing vertical or writeback mode
 - Twenty reachable at `http://localhost:3000`
 - listmonk reachable at `http://localhost:9000`
-- Mailer Studio reachable at `http://localhost:4010`
+- Public website reachable at `http://localhost:4010`
+- Mailer Studio reachable at `http://localhost:4010/studio`
 - Mailpit reachable at `http://localhost:8025`
 - Twenty auth configured in `connector/.env`
 - listmonk auth configured in `connector/.env`
@@ -31,17 +32,21 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 
 ## Click-by-click demo
 ### A. Verify platform health
-1. Open Mailer Studio at `http://localhost:4010/`.
-2. Confirm Twenty and listmonk indicators are green.
-3. Optionally confirm `make status` reports all HTTP services healthy.
+1. Open the public website at `http://localhost:4010/`.
+2. Confirm the portfolio proof section and strategy-call lead form load.
+3. Open Mailer Studio at `http://localhost:4010/studio`.
+4. Confirm Twenty and listmonk indicators are green.
+5. Optionally confirm `make status` reports all HTTP services healthy.
+
+### A1. Capture a public lead
+1. Submit the strategy-call form on `http://localhost:4010/`.
+2. In Twenty, confirm a new Person exists.
+3. Open the Person record and confirm a `Website enquiry` note is attached.
 
 ### B. Create mortgage contact in Twenty
 1. Open Twenty at `http://localhost:3000`.
-2. Create a Person with email address.
-3. Add tags:
-   - `mortgage-retail` for a retail example
-   - or `mortgage-commercial` for a commercial example
-4. Save.
+2. Create a Person with email address, or use the seeded demo workspace.
+3. Save.
 
 ### C. Create Loan Application record in Twenty
 1. Open the `Loan Application` custom object.
@@ -62,9 +67,7 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 ### E. Sync to listmonk
 1. In Mailer Studio click `Run Contact Sync`.
 2. In Mailer Studio click `Run List Sync`.
-3. Open listmonk and confirm:
-   - subscriber exists in `Mortgage AU Pipeline`
-   - subscriber appears in retail or commercial segment lists based on tags
+3. Open listmonk and confirm the subscriber exists in the default mortgage list.
 
 ### F. Generate and send mortgage template draft
 1. Stay in Mailer Studio.
@@ -101,6 +104,20 @@ Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, 
 ```bash
 curl http://localhost:4010/health
 curl http://localhost:4010/studio/status
+```
+
+### Public lead capture
+```bash
+curl -X POST http://localhost:4010/public/leads \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "firstName":"Ava",
+    "lastName":"Mercer",
+    "email":"ava.mercer@example.com",
+    "phone":"+61411000999",
+    "loanType":"Retail home loan",
+    "message":"Looking to buy in the next 90 days and want to understand borrowing capacity."
+  }'
 ```
 
 ### Sync
@@ -155,6 +172,11 @@ verticals/mortgage_au/scripts/send_template_for_application.sh \
   retail_documents_request \
   proof@example.com \
   <twenty-person-id> | jq .
+```
+
+### Seed a realistic mortgage workspace
+```bash
+node verticals/mortgage_au/scripts/seed_demo_workspace.mjs
 ```
 
 ### Recent events

@@ -1,0 +1,5 @@
+.pnp.cjs
+.pnp.loader.mjs
+.twenty/
+.yarn/
+node_modules/

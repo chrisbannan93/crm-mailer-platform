@@ -78,6 +78,9 @@ export function renderSidecarUi(config: AppConfig): string {
     .queueItem .title { font-weight:600; font-size:13px; }
     .queueItem .meta { font-size:12px; color:var(--muted); margin-top:4px; }
     .queueItem .actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+    .queueItem label.inlineCheck { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+    .queueItem input[type="checkbox"], .workflowOpts input[type="checkbox"] { width:auto; margin:0; }
+    .workflowOpts { display:grid; gap:8px; margin-top:10px; }
     button, a.btn {
       border: 0;
       border-radius: 10px;
@@ -270,6 +273,10 @@ export function renderSidecarUi(config: AppConfig): string {
           <button id="docsChaseBtn" class="secondary">Run Docs Chase</button>
           <button id="reviewSweepBtn" class="secondary">Run Review Sweep</button>
         </div>
+        <div class="workflowOpts">
+          <label class="inlineCheck"><input id="workflowDryRun" type="checkbox" /> Dry run only</label>
+          <label class="inlineCheck"><input id="workflowSelectedOnly" type="checkbox" /> Selected applications only</label>
+        </div>
         <div id="workflowQueues" class="queueList" style="margin-top:12px;"></div>
       </section>
 
@@ -294,6 +301,7 @@ export function renderSidecarUi(config: AppConfig): string {
     const logOut = $('logOut');
     const params = new URLSearchParams(window.location.search);
     let busy = false;
+    const selectedApplicationIds = new Set();
 
     function setBusy(v) {
       busy = v;
@@ -448,8 +456,9 @@ export function renderSidecarUi(config: AppConfig): string {
     }
 
     function queueItemHtml(item, withLoad) {
+      const checked = selectedApplicationIds.has(item.applicationId) ? ' checked' : '';
       const actions = withLoad
-        ? '<div class="actions"><button class="ghost js-load-app" data-app-id="' + item.applicationId + '">Load</button><button class="ghost js-open-app" data-app-id="' + item.applicationId + '">Open Studio</button></div>'
+        ? '<div class="actions"><label class="inlineCheck"><input class="js-select-app" type="checkbox" data-app-id="' + item.applicationId + '"' + checked + ' /> Select</label><button class="ghost js-load-app" data-app-id="' + item.applicationId + '">Load</button><button class="ghost js-open-app" data-app-id="' + item.applicationId + '">Open Studio</button></div>'
         : '';
       return '<div class="queueItem"><div class="title">' + item.applicationId + ' · ' + (item.borrowerName || 'Borrower') + '</div><div class="meta">' +
         [item.applicationType, item.pipelineStage, item.lenderTarget, item.pendingRequiredDocs ? (item.pendingRequiredDocs + ' docs pending') : null].filter(Boolean).join(' · ') +
@@ -493,6 +502,14 @@ export function renderSidecarUi(config: AppConfig): string {
         button.onclick = () => {
           const appId = button.dataset.appId;
           if (appId) window.open('/studio/open/application/' + encodeURIComponent(appId), '_blank');
+        };
+      });
+      document.querySelectorAll('.js-select-app').forEach((input) => {
+        input.onchange = () => {
+          const appId = input.dataset.appId;
+          if (!appId) return;
+          if (input.checked) selectedApplicationIds.add(appId);
+          else selectedApplicationIds.delete(appId);
         };
       });
     }
@@ -618,14 +635,22 @@ export function renderSidecarUi(config: AppConfig): string {
     async function runDocsChaseWorkflow() {
       return api('/workflows/docs-chase', {
         method: 'POST',
-        body: JSON.stringify({ limit: 5 }),
+        body: JSON.stringify({
+          limit: 5,
+          dryRun: $('workflowDryRun').checked,
+          ...( $('workflowSelectedOnly').checked ? { applicationIds: Array.from(selectedApplicationIds) } : {} ),
+        }),
       });
     }
 
     async function runReviewSweepWorkflow() {
       return api('/workflows/review-sweep', {
         method: 'POST',
-        body: JSON.stringify({ limit: 5 }),
+        body: JSON.stringify({
+          limit: 5,
+          dryRun: $('workflowDryRun').checked,
+          ...( $('workflowSelectedOnly').checked ? { applicationIds: Array.from(selectedApplicationIds) } : {} ),
+        }),
       });
     }
 

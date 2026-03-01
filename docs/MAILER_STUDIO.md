@@ -112,6 +112,9 @@ Recommended mappings in the current mortgage MVP:
   - sends `annual_review_invite` for retail files
   - sends `commercial_cross_sell` for commercial files
   - creates review tasks in Twenty
+- both workflow actions now support:
+  - `dryRun: true` to preview actions without sending email or creating tasks
+  - `applicationIds: [...]` to run against selected applications instead of the top queue
 
 Current limitation:
 - deep-link routes are in place, but true record-page action buttons inside Twenty still depend on broader Twenty app/runtime support than this self-hosted stack currently exposes

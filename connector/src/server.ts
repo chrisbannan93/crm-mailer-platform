@@ -267,6 +267,7 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
         limit: typeof body.limit === 'number' ? body.limit : undefined,
         createTasks: typeof body.createTasks === 'boolean' ? body.createTasks : undefined,
         sendEmail: typeof body.sendEmail === 'boolean' ? body.sendEmail : undefined,
+        dryRun: typeof body.dryRun === 'boolean' ? body.dryRun : undefined,
       });
       res.json({ ok: true, data: result });
     } catch (error) {
@@ -283,6 +284,7 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
         limit: typeof body.limit === 'number' ? body.limit : undefined,
         createTasks: typeof body.createTasks === 'boolean' ? body.createTasks : undefined,
         sendEmail: typeof body.sendEmail === 'boolean' ? body.sendEmail : undefined,
+        dryRun: typeof body.dryRun === 'boolean' ? body.dryRun : undefined,
       });
       res.json({ ok: true, data: result });
     } catch (error) {

@@ -197,6 +197,9 @@ export class TwentyClient {
       if (application.applicationtype === 'COMMERCIAL_LOAN') set.add('commercial_loans');
       if (isSubmittedLikeStage(application.pipelinestage)) set.add('submitted');
       if (hasPendingRequiredDocuments(application)) set.add('docs_pending');
+      if (isSettledWithinDays(application, 90)) set.add('settled_last_90_days');
+      if (isAnnualReviewDue(application)) set.add('annual_review_due');
+      if (isFixedRateExpiryCandidate(application)) set.add('fixed_rate_expiry');
       profiles.set(email, set);
     }
 
@@ -866,6 +869,31 @@ function hasPendingRequiredDocuments(application: MortgageApplicationNode): bool
 
 function isSubmittedLikeStage(stage?: string | null): boolean {
   return ['SUBMITTED', 'CONDITIONAL_APPROVAL', 'FORMAL_APPROVAL', 'SETTLED'].includes(stage ?? '');
+}
+
+function daysSince(dateValue?: string | null): number | null {
+  if (!dateValue) return null;
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function isSettledWithinDays(application: MortgageApplicationNode, days: number): boolean {
+  if (application.pipelinestage !== 'SETTLED') return false;
+  const age = daysSince(application.targetsettlementdate);
+  return age !== null && age >= 0 && age <= days;
+}
+
+function isAnnualReviewDue(application: MortgageApplicationNode): boolean {
+  if (application.pipelinestage !== 'SETTLED') return false;
+  const age = daysSince(application.targetsettlementdate);
+  return age !== null && age >= 30;
+}
+
+function isFixedRateExpiryCandidate(application: MortgageApplicationNode): boolean {
+  if (application.applicationtype !== 'RETAIL_HOME_LOAN' || application.pipelinestage !== 'SETTLED') return false;
+  const age = daysSince(application.targetsettlementdate);
+  return age !== null && age >= 30 && age <= 75;
 }
 
 function rankMortgageApplication(application: MortgageApplicationNode): number {

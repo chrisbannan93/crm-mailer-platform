@@ -312,6 +312,7 @@ export class ConnectorService {
     limit?: number;
     createTasks?: boolean;
     sendEmail?: boolean;
+    dryRun?: boolean;
   }): Promise<StudioWorkflowRunResult> {
     const dashboard = await this.getStudioDashboard();
     const selected = selectWorkflowRows(dashboard.workflows.find((item) => item.key === 'docs_chase')?.applications ?? [], input?.applicationIds, input?.limit ?? 6);
@@ -320,6 +321,7 @@ export class ConnectorService {
       rows: selected,
       createTasks: input?.createTasks !== false,
       sendEmail: input?.sendEmail !== false,
+      dryRun: input?.dryRun === true,
       templateKeyForRow: (row) => (row.applicationType === 'commercial_loan' ? 'commercial_documents_request' : 'retail_documents_request'),
       buildTaskTitle: (row) => `${row.applicationId} Chase missing documents`,
       buildTaskBody: (context) =>
@@ -334,6 +336,7 @@ export class ConnectorService {
     limit?: number;
     createTasks?: boolean;
     sendEmail?: boolean;
+    dryRun?: boolean;
   }): Promise<StudioWorkflowRunResult> {
     const dashboard = await this.getStudioDashboard();
     const selected = selectWorkflowRows(dashboard.workflows.find((item) => item.key === 'review_sweep')?.applications ?? [], input?.applicationIds, input?.limit ?? 6);
@@ -342,6 +345,7 @@ export class ConnectorService {
       rows: selected,
       createTasks: input?.createTasks !== false,
       sendEmail: input?.sendEmail !== false,
+      dryRun: input?.dryRun === true,
       templateKeyForRow: (row) => (row.applicationType === 'commercial_loan' ? 'commercial_cross_sell' : 'annual_review_invite'),
       buildTaskTitle: (row) => `${row.applicationId} Schedule annual review`,
       buildTaskBody: (context) =>
@@ -868,6 +872,7 @@ export class ConnectorService {
     }>;
     createTasks: boolean;
     sendEmail: boolean;
+    dryRun: boolean;
     templateKeyForRow?(row: { applicationId: string; personId?: string; applicationType?: string | null; recommendedTemplateKey: string }): string;
     buildTaskTitle(row: { applicationId: string }): string;
     buildTaskBody(context: StudioTemplateContext): string;
@@ -885,12 +890,14 @@ export class ConnectorService {
       let taskId: string | undefined;
       let campaignId: number | undefined;
       let templateKey: string | undefined;
-      let skipped = false;
+      let taskPlanned = false;
+      let emailPlanned = false;
+      let skipReason: string | undefined;
 
       if (input.createTasks && assigneeId && this.deps.twenty.createWorkflowTask) {
         if (existingTaskTitles.has(taskTitle)) {
-          skipped = true;
-        } else {
+          skipReason = 'existing open task';
+        } else if (!input.dryRun) {
           taskId = await this.deps.twenty.createWorkflowTask({
             title: taskTitle,
             bodyMarkdown: input.buildTaskBody(context),
@@ -901,32 +908,41 @@ export class ConnectorService {
           });
           existingTaskTitles.add(taskTitle);
           taskCount += 1;
+          taskPlanned = true;
+        } else {
+          taskId = 'dry-run';
+          taskCount += 1;
+          taskPlanned = true;
         }
       }
 
       if (input.sendEmail && context.contact.email) {
         templateKey = input.templateKeyForRow?.(row) ?? row.recommendedTemplateKey;
-        const sent = await this.sendTemplateCampaign({
-          templateKey,
-          to: context.contact.email,
-          personId: context.contact.id,
-          context,
-        });
-        campaignId = sent.campaignId;
+        emailPlanned = true;
+        if (!input.dryRun) {
+          const sent = await this.sendTemplateCampaign({
+            templateKey,
+            to: context.contact.email,
+            personId: context.contact.id,
+            context,
+          });
+          campaignId = sent.campaignId;
+        }
         sentCount += 1;
       } else if (input.sendEmail) {
-        skipped = true;
+        skipReason = skipReason ?? 'no reachable email';
       }
 
-      const action = taskId && campaignId ? 'sent_and_task' : campaignId ? 'sent' : taskId ? 'task' : 'skipped';
-      if (action === 'skipped' || skipped) skippedCount += 1;
+      const action =
+        taskPlanned && emailPlanned ? 'sent_and_task' : emailPlanned ? 'sent' : taskPlanned ? 'task' : 'skipped';
+      if (action === 'skipped') skippedCount += 1;
       results.push({
         applicationId: row.applicationId,
         action,
         templateKey,
-        taskId,
-        campaignId,
-        ...(action === 'skipped' ? { reason: 'existing task or no reachable email' } : {}),
+        ...(taskPlanned ? { taskId } : {}),
+        ...(emailPlanned && campaignId ? { campaignId } : {}),
+        ...(action === 'skipped' ? { reason: skipReason ?? 'existing task or no reachable email' } : {}),
       });
     }
 
@@ -939,6 +955,7 @@ export class ConnectorService {
 
     return {
       workflowKey: input.workflowKey,
+      dryRun: input.dryRun,
       processed: input.rows.length,
       taskCount,
       sentCount,

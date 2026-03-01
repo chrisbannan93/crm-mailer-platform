@@ -88,3 +88,9 @@
 - Why: Operators need a live portfolio view and stage-aware actions without leaving the connector UI or hand-querying Twenty.
 - Alternatives: Keep Mailer Studio as a thin send-only tool, or build mortgage-only workflow logic outside the connector.
 - Impact: The connector now exposes a generic dashboard shape plus workflow action endpoints; the mortgage vertical supplies the application-derived context that powers `docs chase` and `review sweep`.
+
+### 2026-03-01 - Derive mortgage lifecycle cohorts from application state
+- Status: Accepted
+- Why: Mortgage audience lists should follow the actual application book, not hand-maintained contact tags.
+- Alternatives: Maintain tags manually in Twenty, or keep only coarse retail/commercial segment lists.
+- Impact: The mortgage vertical now derives additional segment keys such as `settled_last_90_days`, `annual_review_due`, and `fixed_rate_expiry` from live Loan Application state and checklist status.

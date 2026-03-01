@@ -256,6 +256,7 @@ export type StudioDashboard = {
 
 export type StudioWorkflowRunResult = {
   workflowKey: string;
+  dryRun?: boolean;
   processed: number;
   taskCount: number;
   sentCount: number;

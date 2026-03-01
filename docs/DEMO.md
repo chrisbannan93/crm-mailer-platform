@@ -206,6 +206,10 @@ curl -X POST http://localhost:4010/workflows/docs-chase \
 curl -X POST http://localhost:4010/workflows/review-sweep \
   -H 'Content-Type: application/json' \
   -d '{"limit":2}' | jq .
+
+curl -X POST http://localhost:4010/workflows/docs-chase \
+  -H 'Content-Type: application/json' \
+  -d '{"applicationIds":["APP-001","APP-004"],"dryRun":true}' | jq .
 ```
 
 ### Application-aware template shortcuts
@@ -242,5 +246,6 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' http://
 - CRM users can jump straight from a loan file or person into a prefilled Mailer Studio session instead of hand-building context JSON.
 - Segment-list sync is now derived from live mortgage application state and preserves multiple memberships per subscriber.
 - Mailer Studio now doubles as an operator dashboard with workflow queues, not just a send screen.
+- Lifecycle cohorts such as `settled_last_90_days`, `annual_review_due`, and `fixed_rate_expiry` are now derived from loan state for list sync and campaign targeting.
 - The current MVP still relies on manual Twenty custom-object setup because the self-hosted Twenty runtime rejects built-in system flat entities needed for app-managed custom-object sync.
 - The stable local CRM writeback path for MVP is `rest_note`; `workflow_webhook` remains available but depends on correct workflow configuration inside Twenty.

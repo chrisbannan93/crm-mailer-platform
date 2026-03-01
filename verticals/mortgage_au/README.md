@@ -37,6 +37,15 @@ CRM launch helpers:
 - `POST /workflows/docs-chase`
 - `POST /workflows/review-sweep`
 
+Derived lifecycle cohorts now include:
+- `retail_home_loans`
+- `commercial_loans`
+- `docs_pending`
+- `submitted`
+- `settled_last_90_days`
+- `annual_review_due`
+- `fixed_rate_expiry`
+
 ## Twenty App Automation Status
 - `twenty-apps/mortgage-au/` now contains a code-managed Twenty app slice for `Loan Application` and `Application Document`.
 - The package typechecks on Node 24 + Yarn 4.
@@ -86,6 +95,10 @@ curl -X POST http://localhost:4010/workflows/docs-chase \
 curl -X POST http://localhost:4010/workflows/review-sweep \
   -H 'Content-Type: application/json' \
   -d '{"limit":3}' | jq .
+
+curl -X POST http://localhost:4010/workflows/docs-chase \
+  -H 'Content-Type: application/json' \
+  -d '{"applicationIds":["APP-001"],"dryRun":true}' | jq .
 ```
 
 ## Demo Workspace Seeder

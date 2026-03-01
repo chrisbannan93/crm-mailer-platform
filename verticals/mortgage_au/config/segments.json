@@ -40,6 +40,36 @@
       "rules": [
         { "field": "segmentKeys", "op": "includes", "value": "submitted" }
       ]
+    },
+    {
+      "key": "settled_last_90_days",
+      "name": "Settled Last 90 Days",
+      "description": "Contacts with settled applications in the last 90 days",
+      "listName": "Mortgage AU - Settled Last 90 Days",
+      "match": "all",
+      "rules": [
+        { "field": "segmentKeys", "op": "includes", "value": "settled_last_90_days" }
+      ]
+    },
+    {
+      "key": "annual_review_due",
+      "name": "Annual Review Due",
+      "description": "Contacts whose settled files are old enough to trigger a review touchpoint",
+      "listName": "Mortgage AU - Annual Review Due",
+      "match": "all",
+      "rules": [
+        { "field": "segmentKeys", "op": "includes", "value": "annual_review_due" }
+      ]
+    },
+    {
+      "key": "fixed_rate_expiry",
+      "name": "Fixed Rate Expiry",
+      "description": "Retail settled contacts currently in the fixed-rate review window heuristic",
+      "listName": "Mortgage AU - Fixed Rate Expiry",
+      "match": "all",
+      "rules": [
+        { "field": "segmentKeys", "op": "includes", "value": "fixed_rate_expiry" }
+      ]
     }
   ]
 }

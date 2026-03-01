@@ -1,0 +1,9 @@
+{
+  "key": "mortgage_newsletter",
+  "name": "Mortgage newsletter",
+  "audience": "portfolio",
+  "trigger": "newsletter",
+  "subject": "Harbour Lane weekly mortgage briefing",
+  "bodyHtml": "<p>Hi {{contact.firstName}},</p><p>Here’s what the market looked like this week:</p><ul><li>Rates update: fixed and variable spreads</li><li>Featured tip: preparing your application</li><li>Client stories from recent settlements</li></ul><p>Want us to look at your portfolio or refinance options? Reply and we’ll schedule a call.</p><p>Regards,<br/>{{broker.signature}}</p>",
+  "bodyText": "Hi {{contact.firstName}},\n\nHere’s what the market looked like this week:\n- Rates update: fixed and variable spreads\n- Featured tip: preparing your application\n- Client stories from recent settlements\n\nWant us to look at your portfolio or refinance options? Reply and we’ll schedule a call.\n\nRegards,\n{{broker.signature}}"
+}

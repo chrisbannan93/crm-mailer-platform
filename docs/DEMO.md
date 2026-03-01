@@ -223,6 +223,23 @@ verticals/mortgage_au/scripts/send_template_for_application.sh \
   <twenty-person-id> | jq .
 ```
 
+### Newsletter
+```bash
+curl -X POST http://localhost:4010/campaigns/send-template \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "templateKey":"mortgage_newsletter",
+    "to":"ava.mercer@harbourlane-demo.test",
+    "personId":"d68822d7-5562-4be0-a0fb-536a1decca40",
+    "context":{
+      "contact":{"firstName":"Ava"},
+      "broker":{"name":"Harbour Lane","signature":"Harbour Lane"},
+      "application":{"applicationId":"APP-001","applicationType":"retail_home_loan","pipelineStage":"docs_requested","lenderTarget":"CBA"},
+      "checklist":{"requiredSummary":"ID, bank statements"}
+    }
+  }' | jq .
+```
+
 ### Seed a realistic mortgage workspace
 ```bash
 node verticals/mortgage_au/scripts/seed_demo_workspace.mjs

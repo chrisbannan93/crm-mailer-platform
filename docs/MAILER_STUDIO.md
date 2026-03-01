@@ -73,6 +73,7 @@ The UI calls `GET /studio/status` and shows:
 - `GET /templates/email` lists template metadata for the active vertical
 - `POST /templates/email/render` renders a chosen template using supplied JSON context
 - `POST /campaigns/send-template` creates a listmonk test draft/send using the rendered template
+- The mortgage vertical currently ships these templates (plus `mortgage_newsletter` for periodic briefings): `welcome_onboarding`, `fact_find_booking`, `retail_documents_request`, `retail_intake_acknowledgement`, `retail_submission_confirmation`, `commercial_*` variations, `post_settlement_welcome`, `rate_watch_nurture`, `fixed_rate_expiry`, `investor_cross_sell`, `annual_review_invite`, `referral_request`, `winback_reengagement`.
 - `GET /studio/context/application/:applicationId` fetches live CRM context for a Loan Application
 - `GET /studio/context/person/:personId` fetches live CRM context for a Person
 - `GET /studio/open/application/:applicationId` deep-links from CRM into a prefilled Mailer Studio session

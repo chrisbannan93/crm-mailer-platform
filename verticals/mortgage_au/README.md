@@ -36,6 +36,7 @@ CRM launch helpers:
 - `GET /studio/dashboard`
 - `POST /workflows/docs-chase`
 - `POST /workflows/review-sweep`
+ - `mortgage_newsletter` (weekly external newsletter trigger)
 
 Derived lifecycle cohorts now include:
 - `retail_home_loans`

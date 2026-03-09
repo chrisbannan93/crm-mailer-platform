@@ -1,5 +1,6 @@
 import express from 'express';
 import type { Request } from 'express';
+import crypto from 'node:crypto';
 import type { AppConfig } from './config.js';
 import { registerHealthRoutes, registerSyncRoutes, registerWebhookRoutes } from './routes/index.js';
 import { logger } from './logger.js';
@@ -53,10 +54,13 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
   );
 
   app.use((req, res, next) => {
+    const requestId = req.get('x-request-id') ?? crypto.randomUUID();
+    res.setHeader('x-request-id', requestId);
     const started = Date.now();
     res.on('finish', () => {
       logger.info(
         {
+          requestId,
           method: req.method,
           path: req.path,
           statusCode: res.statusCode,
@@ -201,6 +205,19 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
     }
   });
 
+  app.get('/mortgage-au/touchpoints/:key/eligibility', async (req, res, next) => {
+    try {
+      const applicationId = String(req.query.applicationId ?? '').trim();
+      if (!applicationId) {
+        res.status(400).json({ error: 'Missing `applicationId` query param' });
+        return;
+      }
+      res.json({ ok: true, data: await service.getTouchpointEligibility({ key: req.params.key, applicationId }) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/mortgage-au/touchpoints/:key/preview', async (req, res, next) => {
     try {
       const applicationId = String(req.query.applicationId ?? '').trim();
@@ -250,6 +267,10 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
     } catch (error) {
       next(error);
     }
+  });
+
+  app.get('/mortgage-au/audit-summary', (_req, res) => {
+    res.json({ ok: true, data: service.getTouchpointAuditSummary() });
   });
 
   app.get('/lists', async (_req, res, next) => {

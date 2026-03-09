@@ -3,7 +3,7 @@ import { ConnectorService } from '../src/service.js';
 import { MemoryStore } from '../src/memory-store.js';
 import type { AppConfig } from '../src/config.js';
 import type { StudioTemplateContext, VerticalPack } from '../src/types.js';
-import { getMissingRequiredDocs, matchesTouchpointEligibility } from '../src/services/mortgageTouchpoints.js';
+import { evaluateTouchpointEligibility, getMissingRequiredDocs, matchesTouchpointEligibility } from '../src/services/mortgageTouchpoints.js';
 
 function makeConfig(): AppConfig {
   return {
@@ -84,6 +84,41 @@ describe('mortgage touchpoints', () => {
     );
 
     expect(eligible).toBe(true);
+  });
+
+  it('returns reason when stage is not eligible', () => {
+    const result = evaluateTouchpointEligibility(
+      {
+        key: 'retail_documents_request',
+        lifecycle: 'processing',
+        audience: 'retail',
+        eligibility: { stages: ['docs_requested'], applicationTypes: ['retail_home_loan'], requiresMissingDocs: true },
+        cooldownHours: 48,
+        defaultSubject: 'Documents required',
+        templateFile: 'verticals/mortgage_au/templates/email/retail_documents_request.json',
+        recommendedQueue: 'docs_outstanding',
+        requiredConfirm: true,
+      },
+      {
+        context: {
+          ...context,
+          application: { ...context.application, pipelineStage: 'submitted' },
+        },
+        row: {
+          applicationId: 'APP-001',
+          borrowerName: 'Ava',
+          applicationType: 'retail_home_loan',
+          pipelineStage: 'submitted',
+          pendingRequiredDocs: 2,
+          recommendedTemplateKey: 'retail_documents_request',
+        },
+        now: new Date('2026-03-09T00:00:00.000Z'),
+        consentMarketing: true,
+      },
+    );
+
+    expect(result.eligible).toBe(false);
+    expect(result.reasons.some((reason) => reason.includes('Stage'))).toBe(true);
   });
 
   it('enforces cooldown dedupe on confirm unless override=true', async () => {

@@ -66,9 +66,17 @@ function makeServiceMock() {
     createPublicLead: vi.fn(),
     getTouchpointCatalog: vi.fn().mockResolvedValue([]),
     getEligibleTouchpoints: vi.fn().mockResolvedValue([]),
+    getTouchpointEligibility: vi.fn().mockResolvedValue({ eligible: true, reasons: [], dedupe: { blocked: false } }),
     previewTouchpoint: vi.fn(),
     confirmTouchpoint: vi.fn(),
     getMortgageCommandCenter: vi.fn().mockResolvedValue({ generatedAt: new Date().toISOString(), queues: [] }),
+    getTouchpointAuditSummary: vi.fn().mockReturnValue({
+      generatedAt: new Date().toISOString(),
+      draftsCreatedToday: 0,
+      dedupeBlockedToday: 0,
+      overridesToday: 0,
+      touchpointErrorsToday: 0,
+    }),
     getStudioContextForApplication: vi.fn(),
     getStudioContextForPerson: vi.fn(),
     buildStudioLaunchUrl: vi.fn().mockReturnValue('/studio?applicationId=APP-001'),
@@ -85,6 +93,7 @@ describe('server', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+    expect(res.headers['x-request-id']).toBeTruthy();
   });
 
   it('rejects listmonk webhook when shared header token is invalid', async () => {
@@ -228,5 +237,30 @@ describe('server', () => {
 
     expect(res.status).toBe(200);
     expect(service.confirmTouchpoint).toHaveBeenCalledWith(expect.objectContaining({ key: 'welcome_onboarding', applicationId: 'APP-001' }));
+  });
+
+  it('returns touchpoint eligibility reasons', async () => {
+    const service = makeServiceMock();
+    service.getTouchpointEligibility.mockResolvedValue({
+      eligible: false,
+      reasons: ['Stage docs_complete not in eligibility stages'],
+      dedupe: { blocked: false },
+    });
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).get('/mortgage-au/touchpoints/retail_documents_request/eligibility?applicationId=APP-001');
+
+    expect(res.status).toBe(200);
+    expect(service.getTouchpointEligibility).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'retail_documents_request', applicationId: 'APP-001' }),
+    );
+  });
+
+  it('returns touchpoint audit summary', async () => {
+    const service = makeServiceMock();
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).get('/mortgage-au/audit-summary');
+
+    expect(res.status).toBe(200);
+    expect(service.getTouchpointAuditSummary).toHaveBeenCalled();
   });
 });

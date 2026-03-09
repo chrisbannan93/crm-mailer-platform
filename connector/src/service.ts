@@ -22,9 +22,9 @@ import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIs
 import { buildSubscriberAttribs } from './vertical.js';
 import { renderEmailTemplate as renderTemplate } from './services/templateRenderer.js';
 import {
+  evaluateTouchpointEligibility,
   getMissingRequiredDocs,
   loadMortgageTouchpoints,
-  matchesTouchpointEligibility,
   pickRecommendedTouchpointKey,
   type MortgageTouchpoint,
 } from './services/mortgageTouchpoints.js';
@@ -370,6 +370,43 @@ export class ConnectorService {
     return rowsByKey.get(input.key) ?? [];
   }
 
+  async getTouchpointEligibility(input: { key: string; applicationId: string }): Promise<{
+    key: string;
+    applicationId: string;
+    eligible: boolean;
+    reasons: string[];
+    dedupe: { blocked: boolean; lastConfirmedAt?: string; remainingCooldownHours?: number };
+  }> {
+    const touchpoint = await this.requireTouchpoint(input.key);
+    const context = await this.getStudioContextForApplication(input.applicationId);
+    const eligibility = evaluateTouchpointEligibility(touchpoint, {
+      context,
+      row: {
+        applicationId: input.applicationId,
+        borrowerName: context.application.borrowerName ?? context.contact.firstName ?? 'Borrower',
+        applicationType: context.application.applicationType,
+        pipelineStage: context.application.pipelineStage,
+        pendingRequiredDocs: getMissingRequiredDocs(context).length,
+        recommendedTemplateKey: touchpoint.key,
+      },
+      now: new Date(),
+      consentMarketing: true,
+      updatedAt: context.application.updatedAt ?? undefined,
+    });
+    const dedupe = this.getTouchpointDedupeStatus({
+      touchpointKey: input.key,
+      applicationId: input.applicationId,
+      cooldownHours: touchpoint.cooldownHours,
+    });
+    return {
+      key: input.key,
+      applicationId: input.applicationId,
+      eligible: eligibility.eligible && !dedupe.blocked,
+      reasons: dedupe.blocked ? [...eligibility.reasons, `Cooldown active (${dedupe.remainingCooldownHours}h remaining)`] : eligibility.reasons,
+      dedupe,
+    };
+  }
+
   async previewTouchpoint(input: { key: string; applicationId: string }): Promise<{
     key: string;
     applicationId: string;
@@ -415,6 +452,18 @@ export class ConnectorService {
       cooldownHours: touchpoint.cooldownHours,
     });
     if (dedupe.blocked && !input.override) {
+      this.deps.store.addEvent({
+        kind: 'error',
+        status: 'error',
+        message: `TOUCHPOINT_DEDUPE_BLOCKED ${input.key}`,
+        detail: {
+          eventType: 'TOUCHPOINT_DEDUPE_BLOCKED',
+          touchpointKey: input.key,
+          applicationId: input.applicationId,
+          lastConfirmedAt: dedupe.lastConfirmedAt,
+          remainingCooldownHours: dedupe.remainingCooldownHours,
+        },
+      });
       throw new Error(
         `Touchpoint cooldown active for ${input.key}. Last confirmed at ${dedupe.lastConfirmedAt}. Use override=true to continue.`,
       );
@@ -469,6 +518,19 @@ export class ConnectorService {
         override: input.override === true,
       },
     });
+    if (input.override === true) {
+      this.deps.store.addEvent({
+        kind: 'engagement',
+        status: 'ok',
+        message: `TOUCHPOINT_OVERRIDE_USED ${input.key}`,
+        detail: {
+          eventType: 'TOUCHPOINT_OVERRIDE_USED',
+          touchpointKey: input.key,
+          applicationId: input.applicationId,
+          actor: input.actor ?? 'operator',
+        },
+      });
+    }
     await this.recordEngagement({
       type: 'manual',
       timestamp: loggedAt,
@@ -541,6 +603,36 @@ export class ConnectorService {
         },
         { key: 'upcoming_settlements', label: 'Upcoming Settlements (14 days)', items: upcomingSettlements },
       ],
+    };
+  }
+
+  getTouchpointAuditSummary(): {
+    generatedAt: string;
+    draftsCreatedToday: number;
+    dedupeBlockedToday: number;
+    overridesToday: number;
+    touchpointErrorsToday: number;
+  } {
+    const todayPrefix = new Date().toISOString().slice(0, 10);
+    const events = this.deps.store.listEvents(200);
+    let draftsCreatedToday = 0;
+    let dedupeBlockedToday = 0;
+    let overridesToday = 0;
+    let touchpointErrorsToday = 0;
+    for (const event of events) {
+      if (!event.createdAt.startsWith(todayPrefix)) continue;
+      const eventType = String((event.detail?.eventType as string | undefined) ?? '');
+      if (eventType === 'TOUCHPOINT_DRAFT_CREATED') draftsCreatedToday += 1;
+      if (eventType === 'TOUCHPOINT_DEDUPE_BLOCKED') dedupeBlockedToday += 1;
+      if (eventType === 'TOUCHPOINT_OVERRIDE_USED') overridesToday += 1;
+      if (event.status === 'error' && eventType.startsWith('TOUCHPOINT')) touchpointErrorsToday += 1;
+    }
+    return {
+      generatedAt: nowIso(),
+      draftsCreatedToday,
+      dedupeBlockedToday,
+      overridesToday,
+      touchpointErrorsToday,
     };
   }
 
@@ -1175,13 +1267,14 @@ export class ConnectorService {
       for (const row of dashboard.attention) {
         if (touchpoint.eligibility.manualOnly) continue;
         const context = await this.getStudioContextForApplication(row.applicationId);
-        const allowed = matchesTouchpointEligibility(touchpoint, {
+        const eligibility = evaluateTouchpointEligibility(touchpoint, {
           context,
           row,
           now,
           consentMarketing: true,
+          updatedAt: context.application.updatedAt ?? undefined,
         });
-        if (!allowed) continue;
+        if (!eligibility.eligible) continue;
         const dedupe = this.getTouchpointDedupeStatus({
           touchpointKey: touchpoint.key,
           applicationId: row.applicationId,

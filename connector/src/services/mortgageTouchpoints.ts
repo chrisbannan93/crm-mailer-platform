@@ -45,6 +45,7 @@ type EligibilityInput = {
   consentMarketing?: boolean;
   updatedAt?: string;
 };
+export type EligibilityResult = { eligible: boolean; reasons: string[] };
 
 function getVerticalRoots(): string[] {
   return [
@@ -83,59 +84,72 @@ export function getMissingRequiredDocs(context: StudioTemplateContext): string[]
     .map((item) => item.label);
 }
 
-export function matchesTouchpointEligibility(touchpoint: MortgageTouchpoint, input: EligibilityInput): boolean {
+export function evaluateTouchpointEligibility(touchpoint: MortgageTouchpoint, input: EligibilityInput): EligibilityResult {
   const { eligibility } = touchpoint;
   const stage = (input.context.application.pipelineStage ?? '').toLowerCase();
   const appType = (input.context.application.applicationType ?? '').toLowerCase();
+  const reasons: string[] = [];
 
-  if (touchpoint.audience === 'retail' && appType !== 'retail_home_loan') return false;
-  if (touchpoint.audience === 'commercial' && appType !== 'commercial_loan') return false;
+  if (touchpoint.audience === 'retail' && appType !== 'retail_home_loan') reasons.push('Audience is retail only');
+  if (touchpoint.audience === 'commercial' && appType !== 'commercial_loan') reasons.push('Audience is commercial only');
 
   if (eligibility.applicationTypes?.length) {
     const types = eligibility.applicationTypes.map((value) => value.toLowerCase());
-    if (!types.includes(appType)) return false;
+    if (!types.includes(appType)) reasons.push(`Application type ${appType || 'unknown'} not allowed`);
   }
 
   if (eligibility.stages?.length) {
     const stages = eligibility.stages.map((value) => value.toLowerCase());
-    if (!stages.includes(stage)) return false;
+    if (!stages.includes(stage)) reasons.push(`Stage ${stage || 'unknown'} not in eligibility stages`);
   }
 
-  if (eligibility.consentRequired && input.consentMarketing === false) return false;
+  if (eligibility.consentRequired && input.consentMarketing === false) reasons.push('Marketing consent required');
 
   if (eligibility.requiresMissingDocs && getMissingRequiredDocs(input.context).length === 0) {
-    return false;
+    reasons.push('No missing required documents');
   }
 
   if (eligibility.settlementWithinDays) {
     const settlement = input.context.application.targetSettlementDate;
-    if (!settlement) return false;
+    if (!settlement) reasons.push('No settlement date available');
     const diffDays = Math.ceil((new Date(settlement).getTime() - input.now.getTime()) / (1000 * 60 * 60 * 24));
-    if (Number.isNaN(diffDays) || diffDays < 0 || diffDays > eligibility.settlementWithinDays) return false;
+    if (Number.isNaN(diffDays) || diffDays < 0 || diffDays > eligibility.settlementWithinDays) {
+      reasons.push(`Settlement date is outside ${eligibility.settlementWithinDays} day window`);
+    }
   }
 
   if (eligibility.monthsSinceSettlementMin) {
     const settlement = input.context.application.targetSettlementDate;
-    if (!settlement) return false;
+    if (!settlement) reasons.push('No settlement date available');
     const elapsedDays = Math.floor((input.now.getTime() - new Date(settlement).getTime()) / (1000 * 60 * 60 * 24));
-    if (Number.isNaN(elapsedDays) || elapsedDays < eligibility.monthsSinceSettlementMin * 30) return false;
+    if (Number.isNaN(elapsedDays) || elapsedDays < eligibility.monthsSinceSettlementMin * 30) {
+      reasons.push(`Needs at least ${eligibility.monthsSinceSettlementMin} months since settlement`);
+    }
   }
 
   if (eligibility.fixedRateExpiryWithinDays) {
     const settlement = input.context.application.targetSettlementDate;
-    if (!settlement) return false;
+    if (!settlement) reasons.push('No settlement date available');
     const expiryProxy = new Date(settlement);
     expiryProxy.setFullYear(expiryProxy.getFullYear() + 2);
     const diffDays = Math.ceil((expiryProxy.getTime() - input.now.getTime()) / (1000 * 60 * 60 * 24));
-    if (Number.isNaN(diffDays) || diffDays < 0 || diffDays > eligibility.fixedRateExpiryWithinDays) return false;
+    if (Number.isNaN(diffDays) || diffDays < 0 || diffDays > eligibility.fixedRateExpiryWithinDays) {
+      reasons.push(`Fixed-rate expiry proxy is outside ${eligibility.fixedRateExpiryWithinDays} day window`);
+    }
   }
 
   if (eligibility.inactivityDaysMin && input.updatedAt) {
     const sinceUpdate = Math.floor((input.now.getTime() - new Date(input.updatedAt).getTime()) / (1000 * 60 * 60 * 24));
-    if (Number.isNaN(sinceUpdate) || sinceUpdate < eligibility.inactivityDaysMin) return false;
+    if (Number.isNaN(sinceUpdate) || sinceUpdate < eligibility.inactivityDaysMin) {
+      reasons.push(`Needs ${eligibility.inactivityDaysMin} days of inactivity`);
+    }
   }
 
-  return true;
+  return { eligible: reasons.length === 0, reasons };
+}
+
+export function matchesTouchpointEligibility(touchpoint: MortgageTouchpoint, input: EligibilityInput): boolean {
+  return evaluateTouchpointEligibility(touchpoint, input).eligible;
 }
 
 export function pickRecommendedTouchpointKey(row: StudioDashboardApplicationRow): string {

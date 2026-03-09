@@ -88,6 +88,7 @@ Restore behavior:
 - `./scripts/status.sh`
 - `./scripts/backup.sh`
 - `./scripts/restore.sh [--backup backups/<timestamp>]`
+- `./scripts/mortgage_smoke.sh` (mortgage command-center + touchpoint smoke)
 
 ## Sync Operations (MVP)
 

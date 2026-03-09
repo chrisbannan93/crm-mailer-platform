@@ -441,4 +441,76 @@ describe('ConnectorService', () => {
       }),
     );
   });
+
+  it('processes mortgage website lead intake and creates onboarding draft + audit events', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 10 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
+      createCampaign: vi.fn().mockResolvedValue({ id: 101 }),
+      sendCampaignTest: vi.fn().mockResolvedValue(undefined),
+    };
+    const twenty = {
+      listContacts: vi.fn().mockResolvedValue({ contacts: [] }),
+      fetchPersonById: vi.fn(),
+      writeEngagement: vi.fn().mockResolvedValue(undefined),
+      createMortgageWebsiteLead: vi.fn().mockResolvedValue({
+        personId: 'person_1',
+        applicationId: 'APP-001',
+        taskId: 'task_1',
+      }),
+      getStudioContextForApplication: vi.fn().mockResolvedValue({
+        contact: { id: 'person_1', firstName: 'Ava', email: 'ava@example.com' },
+        broker: { name: 'Broker' },
+        application: {
+          id: 'loan_1',
+          applicationId: 'APP-001',
+          applicationType: 'retail_home_loan',
+          pipelineStage: 'lead_captured',
+        },
+        checklist: { requiredSummary: '', items: [] },
+      }),
+    };
+    const service = new ConnectorService({
+      config: { ...makeConfig(), vertical: 'mortgage_au' },
+      store: new MemoryStore(),
+      vertical: { ...vertical, name: 'mortgage_au' },
+      emailTemplates: [
+        {
+          key: 'welcome_onboarding',
+          name: 'Welcome onboarding',
+          subject: 'Welcome {{contact.firstName}}',
+          bodyHtml: '<p>Welcome {{contact.firstName}}</p>',
+        },
+      ],
+      // @ts-expect-error partial mock for this test
+      twenty,
+      // @ts-expect-error partial mock for this test
+      listmonk,
+    });
+
+    const result = await service.createPublicLead({
+      firstName: 'Ava',
+      email: 'ava@example.com',
+      consentMarketing: true,
+      consentCopyVersion: 'privacy_v1',
+      source: 'public-site',
+    });
+
+    expect(result.personId).toBe('person_1');
+    expect(result.draftedTouchpoints).toEqual(['welcome_onboarding']);
+    expect(listmonk.createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Welcome Ava',
+      }),
+    );
+    const events = service.getRecentEvents(20);
+    const eventTypes = events.map((event) => String(event.detail?.eventType ?? ''));
+    expect(eventTypes).toContain('WEBSITE_LEAD_RECEIVED');
+    expect(eventTypes).toContain('TASK_CREATED');
+    expect(eventTypes).toContain('TOUCHPOINT_DRAFT_CREATED');
+  });
 });

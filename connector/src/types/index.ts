@@ -167,10 +167,27 @@ export type PublicLead = {
   loanType?: string;
   message?: string;
   source?: string;
+  consentMarketing?: boolean;
+  consentTimestamp?: string;
+  consentCopyVersion?: string;
+  attribution?: {
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmTerm?: string;
+    utmContent?: string;
+    referrer?: string;
+    landingPath?: string;
+    sessionId?: string;
+    userAgent?: string;
+  };
 };
 
 export type PublicLeadResult = {
   personId: string;
+  applicationId?: string;
+  taskId?: string;
+  draftedTouchpoints?: string[];
   noteId?: string;
 };
 
@@ -205,6 +222,7 @@ export type StudioTemplateContext = {
     loanAmount?: number | null;
     estimatedPropertyValue?: number | null;
     currencyCode?: string;
+    updatedAt?: string;
   };
   checklist: {
     requiredSummary?: string;

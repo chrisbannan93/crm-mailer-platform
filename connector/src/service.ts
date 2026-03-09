@@ -21,6 +21,13 @@ import type {
 import { createIdempotencyKey, extractContactFromTwentyWebhook, getString, nowIso, sha256Hex } from './utils.js';
 import { buildSubscriberAttribs } from './vertical.js';
 import { renderEmailTemplate as renderTemplate } from './services/templateRenderer.js';
+import {
+  getMissingRequiredDocs,
+  loadMortgageTouchpoints,
+  matchesTouchpointEligibility,
+  pickRecommendedTouchpointKey,
+  type MortgageTouchpoint,
+} from './services/mortgageTouchpoints.js';
 
 function buildSafeCampaignName(input?: string): string {
   const fallback = `CRM Test ${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}`;
@@ -41,6 +48,7 @@ export type ConnectorDeps = {
     getContactByEmail?(email: string): Promise<Record<string, unknown> | null>;
     fetchPersonById(id: string): Promise<Record<string, unknown>>;
     createPublicLead?(lead: PublicLead): Promise<PublicLeadResult>;
+    createMortgageWebsiteLead?(lead: PublicLead): Promise<PublicLeadResult>;
     getStudioContextForApplication?(applicationId: string): Promise<StudioTemplateContext | null>;
     getStudioContextForPerson?(personId: string): Promise<StudioTemplateContext | null>;
     getMortgageDashboard?(): Promise<StudioDashboard>;
@@ -105,8 +113,17 @@ export type ConnectorDeps = {
 
 export class ConnectorService {
   private contactsSyncInProgress = false;
+  private touchpointsCache?: MortgageTouchpoint[];
 
   constructor(private readonly deps: ConnectorDeps) {}
+
+  private async getTouchpoints(): Promise<MortgageTouchpoint[]> {
+    if (this.deps.config.vertical !== 'mortgage_au') return [];
+    if (!this.touchpointsCache) {
+      this.touchpointsCache = await loadMortgageTouchpoints(this.deps.config.vertical);
+    }
+    return this.touchpointsCache;
+  }
 
   listEmailTemplates() {
     return (this.deps.emailTemplates ?? []).map((template) => ({
@@ -214,6 +231,79 @@ export class ConnectorService {
   }
 
   async createPublicLead(lead: PublicLead): Promise<PublicLeadResult> {
+    if (this.deps.config.vertical === 'mortgage_au' && this.deps.twenty.createMortgageWebsiteLead) {
+      const result = await this.deps.twenty.createMortgageWebsiteLead(lead);
+      this.deps.store.addEvent({
+        kind: 'engagement',
+        status: 'ok',
+        message: `WEBSITE_LEAD_RECEIVED ${lead.email}`,
+        detail: {
+          eventType: 'WEBSITE_LEAD_RECEIVED',
+          personId: result.personId,
+          applicationId: result.applicationId,
+          source: lead.source ?? 'public-site',
+          attribution: lead.attribution ?? {},
+          consentMarketing: Boolean(lead.consentMarketing),
+          consentTimestamp: lead.consentTimestamp,
+          consentCopyVersion: lead.consentCopyVersion,
+        },
+      });
+      if (result.taskId) {
+        this.deps.store.addEvent({
+          kind: 'engagement',
+          status: 'ok',
+          message: `TASK_CREATED Initial contact - website enquiry`,
+          detail: {
+            eventType: 'TASK_CREATED',
+            taskId: result.taskId,
+            personId: result.personId,
+            applicationId: result.applicationId,
+          },
+        });
+      }
+      if (result.applicationId && lead.consentMarketing !== false) {
+        try {
+          const context = await this.getStudioContextForApplication(result.applicationId);
+          const recipient = context.contact.email;
+          if (recipient) {
+            const draft = await this.createTemplateDraft({
+              templateKey: 'welcome_onboarding',
+              to: recipient,
+              personId: context.contact.id,
+              context,
+            });
+            result.draftedTouchpoints = ['welcome_onboarding'];
+            this.setTouchpointDedupe({
+              touchpointKey: 'welcome_onboarding',
+              applicationId: result.applicationId,
+              lastConfirmedAt: nowIso(),
+            });
+            this.deps.store.addEvent({
+              kind: 'engagement',
+              status: 'ok',
+              message: `TOUCHPOINT_DRAFT_CREATED welcome_onboarding`,
+              detail: {
+                eventType: 'TOUCHPOINT_DRAFT_CREATED',
+                touchpointKey: 'welcome_onboarding',
+                applicationId: result.applicationId,
+                campaignId: draft.campaignId,
+              },
+            });
+          }
+        } catch (error) {
+          this.deps.store.addEvent({
+            kind: 'error',
+            status: 'error',
+            message: `welcome_onboarding draft skipped: ${error instanceof Error ? error.message : String(error)}`,
+            detail: {
+              eventType: 'TOUCHPOINT_DRAFT_ERROR',
+              applicationId: result.applicationId,
+            },
+          });
+        }
+      }
+      return result;
+    }
     if (!this.deps.twenty.createPublicLead) {
       throw new Error('Twenty public lead capture is not configured');
     }
@@ -247,6 +337,211 @@ export class ConnectorService {
       throw new Error('Twenty mortgage dashboard is not configured');
     }
     return this.deps.twenty.getMortgageDashboard();
+  }
+
+  async getTouchpointCatalog(): Promise<
+    Array<{
+      key: string;
+      lifecycle: string;
+      audience: 'retail' | 'commercial' | 'both';
+      cooldownHours: number;
+      recommendedQueue: string;
+      requiredConfirm: boolean;
+      eligibleCount: number;
+      lastConfirmedAt?: string;
+    }>
+  > {
+    const touchpoints = await this.getTouchpoints();
+    const rowsByKey = await this.getEligibleTouchpointsByKey();
+    return touchpoints.map((touchpoint) => ({
+      key: touchpoint.key,
+      lifecycle: touchpoint.lifecycle,
+      audience: touchpoint.audience,
+      cooldownHours: touchpoint.cooldownHours,
+      recommendedQueue: touchpoint.recommendedQueue,
+      requiredConfirm: touchpoint.requiredConfirm,
+      eligibleCount: rowsByKey.get(touchpoint.key)?.length ?? 0,
+      lastConfirmedAt: this.deps.store.getState<string>(`touchpoint.lastConfirmed.${touchpoint.key}`),
+    }));
+  }
+
+  async getEligibleTouchpoints(input: { key: string }): Promise<StudioDashboard['attention']> {
+    const rowsByKey = await this.getEligibleTouchpointsByKey();
+    return rowsByKey.get(input.key) ?? [];
+  }
+
+  async previewTouchpoint(input: { key: string; applicationId: string }): Promise<{
+    key: string;
+    applicationId: string;
+    context: StudioTemplateContext;
+    missingDocs: string[];
+    subject: string;
+    bodyHtmlPreview: string;
+    dedupe: { blocked: boolean; lastConfirmedAt?: string; remainingCooldownHours?: number };
+  }> {
+    const touchpoint = await this.requireTouchpoint(input.key);
+    const context = await this.getStudioContextForApplication(input.applicationId);
+    const rendered = this.renderEmailTemplate({ templateKey: input.key, context });
+    const dedupe = this.getTouchpointDedupeStatus({ touchpointKey: input.key, applicationId: input.applicationId, cooldownHours: touchpoint.cooldownHours });
+    return {
+      key: input.key,
+      applicationId: input.applicationId,
+      context,
+      missingDocs: getMissingRequiredDocs(context),
+      subject: rendered.subject,
+      bodyHtmlPreview: rendered.bodyHtml,
+      dedupe,
+    };
+  }
+
+  async confirmTouchpoint(input: {
+    key: string;
+    applicationId: string;
+    actor?: string;
+    override?: boolean;
+  }): Promise<{
+    key: string;
+    applicationId: string;
+    campaignId: number;
+    followupTaskId?: string;
+    overridden: boolean;
+    loggedAt: string;
+  }> {
+    const touchpoint = await this.requireTouchpoint(input.key);
+    const context = await this.getStudioContextForApplication(input.applicationId);
+    const dedupe = this.getTouchpointDedupeStatus({
+      touchpointKey: input.key,
+      applicationId: input.applicationId,
+      cooldownHours: touchpoint.cooldownHours,
+    });
+    if (dedupe.blocked && !input.override) {
+      throw new Error(
+        `Touchpoint cooldown active for ${input.key}. Last confirmed at ${dedupe.lastConfirmedAt}. Use override=true to continue.`,
+      );
+    }
+
+    const recipient = context.contact.email;
+    if (!recipient) {
+      throw new Error(`Application ${input.applicationId} has no contact email`);
+    }
+    const draft = await this.createTemplateDraft({
+      templateKey: input.key,
+      to: recipient,
+      personId: context.contact.id,
+      context,
+    });
+
+    let followupTaskId: string | undefined;
+    if (this.deps.twenty.getDefaultAssigneeId && this.deps.twenty.createWorkflowTask) {
+      const assigneeId = await this.deps.twenty.getDefaultAssigneeId();
+      if (assigneeId) {
+        const dueHours = input.key.includes('documents_request') ? 48 : 24;
+        followupTaskId = await this.deps.twenty.createWorkflowTask({
+          title: `${context.application.applicationId ?? input.applicationId} Follow up ${input.key}`,
+          bodyMarkdown: `Touchpoint: ${input.key}\\nApplication: ${context.application.applicationId ?? input.applicationId}`,
+          assigneeId,
+          dueAt: new Date(Date.now() + dueHours * 60 * 60 * 1000).toISOString(),
+          personId: context.contact.id,
+          loanApplicationId: context.application.id,
+        });
+      }
+    }
+
+    const loggedAt = nowIso();
+    this.setTouchpointDedupe({
+      touchpointKey: input.key,
+      applicationId: input.applicationId,
+      lastConfirmedAt: loggedAt,
+    });
+    this.deps.store.setState(`touchpoint.lastConfirmed.${input.key}`, loggedAt);
+    this.deps.store.addEvent({
+      kind: 'engagement',
+      status: 'ok',
+      message: `TOUCHPOINT_CONFIRMED ${input.key}`,
+      detail: {
+        eventType: 'TOUCHPOINT_CONFIRMED',
+        touchpointKey: input.key,
+        applicationId: input.applicationId,
+        contactId: context.contact.id,
+        actor: input.actor ?? 'operator',
+        campaignId: draft.campaignId,
+        followupTaskId,
+        override: input.override === true,
+      },
+    });
+    await this.recordEngagement({
+      type: 'manual',
+      timestamp: loggedAt,
+      personId: context.contact.id,
+      email: context.contact.email,
+      source: 'touchpoint-confirm',
+      metadata: {
+        touchpointKey: input.key,
+        applicationId: input.applicationId,
+        actor: input.actor ?? 'operator',
+        campaignId: draft.campaignId,
+        followupTaskId,
+      },
+    });
+
+    return {
+      key: input.key,
+      applicationId: input.applicationId,
+      campaignId: draft.campaignId,
+      followupTaskId,
+      overridden: input.override === true,
+      loggedAt,
+    };
+  }
+
+  async getMortgageCommandCenter(): Promise<{
+    generatedAt: string;
+    queues: Array<{
+      key: string;
+      label: string;
+      items: Array<
+        StudioDashboard['attention'][number] & {
+          ageInStageDays: number;
+          recommendedTouchpointKey: string;
+        }
+      >;
+    }>;
+  }> {
+    const dashboard = await this.getStudioDashboard();
+    const now = Date.now();
+    const rows = await Promise.all(
+      dashboard.attention.map(async (row) => {
+        const context = await this.getStudioContextForApplication(row.applicationId);
+        const updatedAt = context.application.updatedAt;
+        const ageInStageDays = updatedAt ? Math.max(0, Math.floor((now - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24))) : 0;
+        return {
+          ...row,
+          ageInStageDays,
+          recommendedTouchpointKey: pickRecommendedTouchpointKey(row),
+        };
+      }),
+    );
+    const byStage = (stages: string[]) => rows.filter((row) => stages.includes((row.pipelineStage ?? '').toLowerCase()));
+    const docsOutstanding = rows.filter((row) => row.pendingRequiredDocs > 0 || (row.pipelineStage ?? '').toLowerCase() === 'docs_requested');
+    const upcomingSettlements = rows.filter((row) => {
+      if (!row.targetSettlementDate) return false;
+      const diffDays = Math.ceil((new Date(row.targetSettlementDate).getTime() - now) / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 14;
+    });
+    return {
+      generatedAt: nowIso(),
+      queues: [
+        { key: 'new_web_leads', label: 'New Web Leads', items: byStage(['lead_captured']) },
+        { key: 'awaiting_first_contact', label: 'Awaiting First Contact', items: byStage(['lead_captured', 'discovery_booked']) },
+        { key: 'docs_outstanding', label: 'Docs Outstanding', items: docsOutstanding },
+        {
+          key: 'lender_response_pending',
+          label: 'Lender Response Pending',
+          items: byStage(['submitted', 'indicative_offer', 'conditional_approval', 'formal_approval']),
+        },
+        { key: 'upcoming_settlements', label: 'Upcoming Settlements (14 days)', items: upcomingSettlements },
+      ],
+    };
   }
 
   buildStudioLaunchUrl(context: StudioTemplateContext, templateKey?: string): string {
@@ -791,6 +1086,52 @@ export class ConnectorService {
     return { ...result, templateKey: input.templateKey };
   }
 
+  async createTemplateDraft(input: {
+    templateKey: string;
+    to: string;
+    personId?: string;
+    context?: Record<string, unknown>;
+    campaignName?: string;
+  }): Promise<{ campaignId: number; templateKey: string; recipient: string }> {
+    const rendered = this.renderEmailTemplate({
+      templateKey: input.templateKey,
+      context: input.context,
+    });
+    const list = await this.bootstrapDefaultList();
+    const application = (input.context?.application as Record<string, unknown> | undefined) ?? {};
+    const metadata = {
+      applicationId: getString(application.applicationId) ?? getString(application.id),
+      applicationType: getString(application.applicationType),
+      pipelineStage: getString(application.pipelineStage),
+      touchpointKey: input.templateKey,
+    };
+    const html = this.buildTrackedEmailBody({
+      to: input.to,
+      personId: input.personId,
+      bodyHtml: rendered.bodyHtml,
+      metadata,
+    });
+    const campaign = await this.deps.listmonk.createCampaign({
+      name: buildSafeCampaignName(input.campaignName ?? `${rendered.name} Draft`),
+      subject: rendered.subject,
+      listIds: [list.id],
+      body: html,
+      tags: [...this.deps.vertical.defaultList.tags, 'touchpoint-draft'],
+    });
+    this.deps.store.addEvent({
+      kind: 'campaign',
+      status: 'ok',
+      message: `TOUCHPOINT_DRAFT_CREATED ${input.templateKey}`,
+      detail: {
+        eventType: 'TOUCHPOINT_DRAFT_CREATED',
+        campaignId: campaign.id,
+        templateKey: input.templateKey,
+        recipient: input.to,
+      },
+    });
+    return { campaignId: campaign.id, templateKey: input.templateKey, recipient: input.to };
+  }
+
   async recordEngagement(event: Omit<EngagementEvent, 'timestamp'> & { timestamp?: string }) {
     const full: EngagementEvent = { ...event, timestamp: event.timestamp ?? nowIso() };
 
@@ -822,6 +1163,74 @@ export class ConnectorService {
       });
       throw error;
     }
+  }
+
+  private async getEligibleTouchpointsByKey(): Promise<Map<string, StudioDashboard['attention']>> {
+    const touchpoints = await this.getTouchpoints();
+    const dashboard = await this.getStudioDashboard();
+    const now = new Date();
+    const result = new Map<string, StudioDashboard['attention']>();
+    for (const touchpoint of touchpoints) {
+      const rows: StudioDashboard['attention'] = [];
+      for (const row of dashboard.attention) {
+        if (touchpoint.eligibility.manualOnly) continue;
+        const context = await this.getStudioContextForApplication(row.applicationId);
+        const allowed = matchesTouchpointEligibility(touchpoint, {
+          context,
+          row,
+          now,
+          consentMarketing: true,
+        });
+        if (!allowed) continue;
+        const dedupe = this.getTouchpointDedupeStatus({
+          touchpointKey: touchpoint.key,
+          applicationId: row.applicationId,
+          cooldownHours: touchpoint.cooldownHours,
+        });
+        rows.push({
+          ...row,
+          recommendedTemplateKey: dedupe.blocked ? `${row.recommendedTemplateKey} (cooldown)` : row.recommendedTemplateKey,
+        });
+      }
+      result.set(touchpoint.key, rows);
+    }
+    return result;
+  }
+
+  private getTouchpointStoreKey(touchpointKey: string, applicationId: string): string {
+    return `touchpoint.confirmed.${touchpointKey}.${applicationId}`;
+  }
+
+  private setTouchpointDedupe(input: { touchpointKey: string; applicationId: string; lastConfirmedAt: string }): void {
+    this.deps.store.setState(this.getTouchpointStoreKey(input.touchpointKey, input.applicationId), {
+      lastConfirmedAt: input.lastConfirmedAt,
+    });
+  }
+
+  private getTouchpointDedupeStatus(input: {
+    touchpointKey: string;
+    applicationId: string;
+    cooldownHours: number;
+  }): { blocked: boolean; lastConfirmedAt?: string; remainingCooldownHours?: number } {
+    const state = this.deps.store.getState<{ lastConfirmedAt?: string }>(
+      this.getTouchpointStoreKey(input.touchpointKey, input.applicationId),
+    );
+    const last = state?.lastConfirmedAt;
+    if (!last) return { blocked: false };
+    const elapsedMs = Date.now() - new Date(last).getTime();
+    const cooldownMs = input.cooldownHours * 60 * 60 * 1000;
+    if (elapsedMs >= cooldownMs) return { blocked: false, lastConfirmedAt: last };
+    const remaining = Math.ceil((cooldownMs - elapsedMs) / (60 * 60 * 1000));
+    return { blocked: true, lastConfirmedAt: last, remainingCooldownHours: remaining };
+  }
+
+  private async requireTouchpoint(key: string): Promise<MortgageTouchpoint> {
+    const touchpoints = await this.getTouchpoints();
+    const touchpoint = touchpoints.find((item) => item.key === key);
+    if (!touchpoint) {
+      throw new Error(`Unknown touchpoint key '${key}'`);
+    }
+    return touchpoint;
   }
 
   private requireEmailTemplate(templateKey: string): EmailTemplateDefinition {

@@ -26,6 +26,17 @@ const publicLeadSchema = z.object({
   phone: z.string().trim().optional(),
   loanType: z.string().trim().optional(),
   message: z.string().trim().max(2000).optional(),
+  consentMarketing: z.coerce.boolean().optional(),
+  consentTimestamp: z.string().trim().optional(),
+  consentCopyVersion: z.string().trim().optional(),
+  utm_source: z.string().trim().optional(),
+  utm_medium: z.string().trim().optional(),
+  utm_campaign: z.string().trim().optional(),
+  utm_term: z.string().trim().optional(),
+  utm_content: z.string().trim().optional(),
+  referrer: z.string().trim().optional(),
+  landing_path: z.string().trim().optional(),
+  session_id: z.string().trim().optional(),
 });
 
 export function createServer(config: AppConfig, service: ConnectorService, publicSiteContent?: import('./types/index.js').WebsiteContent | null) {
@@ -115,7 +126,26 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
     try {
       const lead = publicLeadSchema.parse(getBody(req));
       const result = await service.createPublicLead({
-        ...lead,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        loanType: lead.loanType,
+        message: lead.message,
+        consentMarketing: lead.consentMarketing ?? false,
+        consentTimestamp: lead.consentTimestamp ?? new Date().toISOString(),
+        consentCopyVersion: lead.consentCopyVersion ?? 'privacy_v1',
+        attribution: {
+          utmSource: lead.utm_source,
+          utmMedium: lead.utm_medium,
+          utmCampaign: lead.utm_campaign,
+          utmTerm: lead.utm_term,
+          utmContent: lead.utm_content,
+          referrer: lead.referrer ?? req.get('referer') ?? undefined,
+          landingPath: lead.landing_path ?? req.path,
+          sessionId: lead.session_id,
+          userAgent: req.get('user-agent') ?? undefined,
+        },
         source: 'public-site',
       });
       res.status(201).json({ ok: true, data: result });
@@ -145,6 +175,78 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
   app.get('/studio/dashboard', async (_req, res, next) => {
     try {
       res.json({ ok: true, data: await service.getStudioDashboard() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/mortgage-au/touchpoints', async (_req, res, next) => {
+    try {
+      res.json({ ok: true, data: await service.getTouchpointCatalog() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/mortgage-au/touchpoints/eligible', async (req, res, next) => {
+    try {
+      const key = String(req.query.key ?? '').trim();
+      if (!key) {
+        res.status(400).json({ error: 'Missing `key` query param' });
+        return;
+      }
+      res.json({ ok: true, data: await service.getEligibleTouchpoints({ key }) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/mortgage-au/touchpoints/:key/preview', async (req, res, next) => {
+    try {
+      const applicationId = String(req.query.applicationId ?? '').trim();
+      if (!applicationId) {
+        res.status(400).json({ error: 'Missing `applicationId` query param' });
+        return;
+      }
+      res.json({
+        ok: true,
+        data: await service.previewTouchpoint({
+          key: req.params.key,
+          applicationId,
+        }),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/mortgage-au/touchpoints/:key/confirm', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const applicationId = String(body.applicationId ?? '').trim();
+      if (!applicationId) {
+        res.status(400).json({ error: 'Missing `applicationId`' });
+        return;
+      }
+      const actor = typeof body.actor === 'string' ? body.actor : undefined;
+      const override = body.override === true;
+      res.json({
+        ok: true,
+        data: await service.confirmTouchpoint({
+          key: req.params.key,
+          applicationId,
+          actor,
+          override,
+        }),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/mortgage-au/command-center', async (_req, res, next) => {
+    try {
+      res.json({ ok: true, data: await service.getMortgageCommandCenter() });
     } catch (error) {
       next(error);
     }

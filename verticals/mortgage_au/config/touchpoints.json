@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "touchpoints": [
+    {
+      "key": "welcome_onboarding",
+      "lifecycle": "intake",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["lead_captured", "discovery_booked"],
+        "inactivityDaysMin": 0,
+        "consentRequired": true
+      },
+      "cooldownHours": 48,
+      "defaultSubject": "Welcome to your mortgage journey",
+      "templateFile": "verticals/mortgage_au/templates/email/welcome_onboarding.json",
+      "recommendedQueue": "new_web_leads",
+      "requiredConfirm": true
+    },
+    {
+      "key": "fact_find_booking",
+      "lifecycle": "intake",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["discovery_booked", "fact_find_complete"],
+        "inactivityDaysMin": 2,
+        "consentRequired": true
+      },
+      "cooldownHours": 72,
+      "defaultSubject": "Book your fact-find session",
+      "templateFile": "verticals/mortgage_au/templates/email/fact_find_booking.json",
+      "recommendedQueue": "awaiting_first_contact",
+      "requiredConfirm": true
+    },
+    {
+      "key": "retail_intake_acknowledgement",
+      "lifecycle": "intake",
+      "audience": "retail",
+      "eligibility": {
+        "applicationTypes": ["retail_home_loan"],
+        "stages": ["lead_captured", "discovery_booked"],
+        "consentRequired": true
+      },
+      "cooldownHours": 72,
+      "defaultSubject": "Retail enquiry acknowledged",
+      "templateFile": "verticals/mortgage_au/templates/email/retail_intake_acknowledgement.json",
+      "recommendedQueue": "new_web_leads",
+      "requiredConfirm": true
+    },
+    {
+      "key": "commercial_intake_acknowledgement",
+      "lifecycle": "intake",
+      "audience": "commercial",
+      "eligibility": {
+        "applicationTypes": ["commercial_loan"],
+        "stages": ["lead_captured", "discovery_booked"],
+        "consentRequired": true
+      },
+      "cooldownHours": 72,
+      "defaultSubject": "Commercial enquiry acknowledged",
+      "templateFile": "verticals/mortgage_au/templates/email/commercial_intake_acknowledgement.json",
+      "recommendedQueue": "new_web_leads",
+      "requiredConfirm": true
+    },
+    {
+      "key": "retail_documents_request",
+      "lifecycle": "processing",
+      "audience": "retail",
+      "eligibility": {
+        "applicationTypes": ["retail_home_loan"],
+        "stages": ["docs_requested", "docs_complete", "fact_find_complete"],
+        "requiresMissingDocs": true,
+        "consentRequired": true
+      },
+      "cooldownHours": 48,
+      "defaultSubject": "Documents required for your home loan",
+      "templateFile": "verticals/mortgage_au/templates/email/retail_documents_request.json",
+      "recommendedQueue": "docs_outstanding",
+      "requiredConfirm": true
+    },
+    {
+      "key": "commercial_documents_request",
+      "lifecycle": "processing",
+      "audience": "commercial",
+      "eligibility": {
+        "applicationTypes": ["commercial_loan"],
+        "stages": ["docs_requested", "docs_complete", "deal_structuring"],
+        "requiresMissingDocs": true,
+        "consentRequired": true
+      },
+      "cooldownHours": 48,
+      "defaultSubject": "Documents required for your commercial loan",
+      "templateFile": "verticals/mortgage_au/templates/email/commercial_documents_request.json",
+      "recommendedQueue": "docs_outstanding",
+      "requiredConfirm": true
+    },
+    {
+      "key": "retail_submission_confirmation",
+      "lifecycle": "processing",
+      "audience": "retail",
+      "eligibility": {
+        "applicationTypes": ["retail_home_loan"],
+        "stages": ["submitted", "conditional_approval", "formal_approval"],
+        "consentRequired": true
+      },
+      "cooldownHours": 168,
+      "defaultSubject": "Your application has been submitted",
+      "templateFile": "verticals/mortgage_au/templates/email/retail_submission_confirmation.json",
+      "recommendedQueue": "lender_response_pending",
+      "requiredConfirm": true
+    },
+    {
+      "key": "commercial_submission_confirmation",
+      "lifecycle": "processing",
+      "audience": "commercial",
+      "eligibility": {
+        "applicationTypes": ["commercial_loan"],
+        "stages": ["submitted", "indicative_offer", "conditional_approval", "formal_approval"],
+        "consentRequired": true
+      },
+      "cooldownHours": 168,
+      "defaultSubject": "Your commercial application has been submitted",
+      "templateFile": "verticals/mortgage_au/templates/email/commercial_submission_confirmation.json",
+      "recommendedQueue": "lender_response_pending",
+      "requiredConfirm": true
+    },
+    {
+      "key": "rate_watch_nurture",
+      "lifecycle": "retention",
+      "audience": "both",
+      "eligibility": {
+        "manualOnly": true,
+        "stages": ["settled"],
+        "consentRequired": true
+      },
+      "cooldownHours": 168,
+      "defaultSubject": "Rate watch update",
+      "templateFile": "verticals/mortgage_au/templates/email/rate_watch_nurture.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    },
+    {
+      "key": "fixed_rate_expiry",
+      "lifecycle": "retention",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["settled"],
+        "fixedRateExpiryWithinDays": 90,
+        "consentRequired": true
+      },
+      "cooldownHours": 336,
+      "defaultSubject": "Your fixed rate expiry review window",
+      "templateFile": "verticals/mortgage_au/templates/email/fixed_rate_expiry.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    },
+    {
+      "key": "investor_cross_sell",
+      "lifecycle": "retention",
+      "audience": "retail",
+      "eligibility": {
+        "applicationTypes": ["retail_home_loan"],
+        "stages": ["settled"],
+        "monthsSinceSettlementMin": 3,
+        "tagsAny": ["investor", "cross_sell"],
+        "consentRequired": true
+      },
+      "cooldownHours": 720,
+      "defaultSubject": "Portfolio growth opportunities",
+      "templateFile": "verticals/mortgage_au/templates/email/investor_cross_sell.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    },
+    {
+      "key": "post_settlement_welcome",
+      "lifecycle": "settlement",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["settled"],
+        "settlementWithinDays": 14,
+        "consentRequired": true
+      },
+      "cooldownHours": 336,
+      "defaultSubject": "Welcome post-settlement",
+      "templateFile": "verticals/mortgage_au/templates/email/post_settlement_welcome.json",
+      "recommendedQueue": "upcoming_settlements",
+      "requiredConfirm": true
+    },
+    {
+      "key": "annual_review_invite",
+      "lifecycle": "retention",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["settled"],
+        "monthsSinceSettlementMin": 10,
+        "consentRequired": true
+      },
+      "cooldownHours": 720,
+      "defaultSubject": "Annual mortgage review invitation",
+      "templateFile": "verticals/mortgage_au/templates/email/annual_review_invite.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    },
+    {
+      "key": "mortgage_newsletter",
+      "lifecycle": "marketing",
+      "audience": "both",
+      "eligibility": {
+        "manualOnly": true,
+        "consentRequired": true
+      },
+      "cooldownHours": 168,
+      "defaultSubject": "Weekly mortgage update",
+      "templateFile": "verticals/mortgage_au/templates/email/mortgage_newsletter.json",
+      "recommendedQueue": "marketing",
+      "requiredConfirm": true
+    },
+    {
+      "key": "referral_request",
+      "lifecycle": "retention",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["settled"],
+        "monthsSinceSettlementMin": 1,
+        "consentRequired": true
+      },
+      "cooldownHours": 720,
+      "defaultSubject": "Know someone needing a broker?",
+      "templateFile": "verticals/mortgage_au/templates/email/referral_request.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    },
+    {
+      "key": "winback_reengagement",
+      "lifecycle": "retention",
+      "audience": "both",
+      "eligibility": {
+        "stages": ["closed_lost", "settled"],
+        "inactivityDaysMin": 90,
+        "consentRequired": true
+      },
+      "cooldownHours": 720,
+      "defaultSubject": "Let’s revisit your finance goals",
+      "templateFile": "verticals/mortgage_au/templates/email/winback_reengagement.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    },
+    {
+      "key": "commercial_cross_sell",
+      "lifecycle": "retention",
+      "audience": "commercial",
+      "eligibility": {
+        "applicationTypes": ["commercial_loan"],
+        "stages": ["settled", "formal_approval"],
+        "monthsSinceSettlementMin": 2,
+        "consentRequired": true
+      },
+      "cooldownHours": 720,
+      "defaultSubject": "Commercial funding expansion options",
+      "templateFile": "verticals/mortgage_au/templates/email/commercial_cross_sell.json",
+      "recommendedQueue": "manual",
+      "requiredConfirm": true
+    }
+  ]
+}

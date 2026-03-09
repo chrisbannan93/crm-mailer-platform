@@ -64,6 +64,11 @@ function makeServiceMock() {
     runReviewSweepWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'review_sweep', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
     recordEngagement: vi.fn(),
     createPublicLead: vi.fn(),
+    getTouchpointCatalog: vi.fn().mockResolvedValue([]),
+    getEligibleTouchpoints: vi.fn().mockResolvedValue([]),
+    previewTouchpoint: vi.fn(),
+    confirmTouchpoint: vi.fn(),
+    getMortgageCommandCenter: vi.fn().mockResolvedValue({ generatedAt: new Date().toISOString(), queues: [] }),
     getStudioContextForApplication: vi.fn(),
     getStudioContextForPerson: vi.fn(),
     buildStudioLaunchUrl: vi.fn().mockReturnValue('/studio?applicationId=APP-001'),
@@ -202,5 +207,26 @@ describe('server', () => {
 
     expect(res.status).toBe(200);
     expect(service.runReviewSweepWorkflow).toHaveBeenCalledWith(expect.objectContaining({ limit: 3 }));
+  });
+
+  it('returns mortgage touchpoints catalog', async () => {
+    const service = makeServiceMock();
+    service.getTouchpointCatalog.mockResolvedValue([{ key: 'welcome_onboarding', eligibleCount: 2 }]);
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).get('/mortgage-au/touchpoints');
+
+    expect(res.status).toBe(200);
+    expect(service.getTouchpointCatalog).toHaveBeenCalled();
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('confirms a mortgage touchpoint draft', async () => {
+    const service = makeServiceMock();
+    service.confirmTouchpoint.mockResolvedValue({ key: 'welcome_onboarding', applicationId: 'APP-001', campaignId: 44 });
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).post('/mortgage-au/touchpoints/welcome_onboarding/confirm').send({ applicationId: 'APP-001' });
+
+    expect(res.status).toBe(200);
+    expect(service.confirmTouchpoint).toHaveBeenCalledWith(expect.objectContaining({ key: 'welcome_onboarding', applicationId: 'APP-001' }));
   });
 });

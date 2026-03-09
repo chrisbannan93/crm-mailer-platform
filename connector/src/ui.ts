@@ -216,6 +216,30 @@ export function renderSidecarUi(config: AppConfig): string {
         </div>
       </section>
 
+      ${config.vertical === 'mortgage_au' ? `
+      <section class="panel col-8">
+        <h2>Mortgage Command Center</h2>
+        <p class="small">Action-first work queues with recommended touchpoint actions.</p>
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="refreshCommandCenterBtn" class="ghost">Refresh Command Center</button>
+        </div>
+        <div id="commandCenterQueues" class="queueList" style="margin-top:12px;"></div>
+      </section>
+
+      <section class="panel col-4">
+        <h2>Touchpoints</h2>
+        <p class="small">Eligibility, cooldown visibility, and one-click preview/confirm drafts.</p>
+        <label class="small" for="touchpointApplicationId">Application ID (for preview/confirm)</label>
+        <input id="touchpointApplicationId" type="text" placeholder="APP-001 or record id" />
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="refreshTouchpointsBtn" class="ghost">Refresh Touchpoints</button>
+          <a class="btn" href="${config.listmonk.baseUrl}" target="_blank" rel="noreferrer">Open listmonk</a>
+        </div>
+        <div id="newsletterReminder" class="small" style="margin-top:10px;"></div>
+        <div id="touchpointsPanel" class="queueList" style="margin-top:12px;"></div>
+      </section>
+      ` : ''}
+
       <section class="panel col-8">
         <h2>Template Studio</h2>
         <div class="metric"><span class="k">Active vertical</span><span class="v mono">${config.vertical}</span></div>
@@ -305,19 +329,11 @@ export function renderSidecarUi(config: AppConfig): string {
 
     function setBusy(v) {
       busy = v;
-      $('contactSyncBtn').disabled = v;
-      $('listSyncBtn').disabled = v;
-      $('refreshStatusBtn').disabled = v;
-      $('refreshEngagementBtn').disabled = v;
-      $('refreshAllBtn').disabled = v;
-      $('previewTemplateBtn').disabled = v;
-      $('sendTemplateBtn').disabled = v;
-      $('loadApplicationBtn').disabled = v;
-      $('loadPersonBtn').disabled = v;
-      $('sendRecommendedBtn').disabled = v;
-      $('refreshDashboardBtn').disabled = v;
-      $('docsChaseBtn').disabled = v;
-      $('reviewSweepBtn').disabled = v;
+      ['contactSyncBtn','listSyncBtn','refreshStatusBtn','refreshEngagementBtn','refreshAllBtn','previewTemplateBtn','sendTemplateBtn','loadApplicationBtn','loadPersonBtn','sendRecommendedBtn','refreshDashboardBtn','docsChaseBtn','reviewSweepBtn','refreshCommandCenterBtn','refreshTouchpointsBtn']
+        .forEach((id) => {
+          const el = $(id);
+          if (el) el.disabled = v;
+        });
     }
 
     function writeLog(value) {
@@ -521,6 +537,116 @@ export function renderSidecarUi(config: AppConfig): string {
       return data;
     }
 
+    function renderCommandCenter(data) {
+      const root = $('commandCenterQueues');
+      if (!root) return;
+      const queues = data?.queues || [];
+      root.innerHTML = '';
+      if (queues.length === 0) {
+        root.innerHTML = '<div class="queueItem"><div class="title">No command center queues</div></div>';
+        return;
+      }
+      root.innerHTML = queues.map((queue) => {
+        const items = queue.items || [];
+        const itemHtml = items.length === 0
+          ? '<div class="queueItem"><div class="meta">No records</div></div>'
+          : items.map((row) =>
+            '<div class="queueItem">' +
+              '<div class="title">' + (row.applicationId || 'Unknown') + ' · ' + (row.borrowerName || 'Borrower') + '</div>' +
+              '<div class="meta">' + [row.applicationType, row.pipelineStage, row.ageInStageDays + 'd in stage', 'Recommended: ' + row.recommendedTouchpointKey].filter(Boolean).join(' · ') + '</div>' +
+              '<div class="actions">' +
+                '<button class="ghost js-cmd-preview" data-touchpoint-key="' + row.recommendedTouchpointKey + '" data-application-id="' + row.applicationId + '">Preview</button>' +
+                '<button class="secondary js-cmd-confirm" data-touchpoint-key="' + row.recommendedTouchpointKey + '" data-application-id="' + row.applicationId + '">Confirm Draft</button>' +
+              '</div>' +
+            '</div>'
+          ).join('');
+        return '<div class="queueItem"><div class="title">' + queue.label + '</div><div class="meta">' + items.length + ' records</div><div class="queueList" style="margin-top:8px;">' + itemHtml + '</div></div>';
+      }).join('');
+
+      document.querySelectorAll('.js-cmd-preview').forEach((button) => {
+        button.onclick = () => wrapAction('touchpoint-preview', async () => {
+          const key = button.dataset.touchpointKey;
+          const applicationId = button.dataset.applicationId;
+          if (!key || !applicationId) throw new Error('Missing touchpoint key or application id');
+          return api('/mortgage-au/touchpoints/' + encodeURIComponent(key) + '/preview?applicationId=' + encodeURIComponent(applicationId));
+        });
+      });
+      document.querySelectorAll('.js-cmd-confirm').forEach((button) => {
+        button.onclick = () => wrapAction('touchpoint-confirm', async () => {
+          const key = button.dataset.touchpointKey;
+          const applicationId = button.dataset.applicationId;
+          if (!key || !applicationId) throw new Error('Missing touchpoint key or application id');
+          return api('/mortgage-au/touchpoints/' + encodeURIComponent(key) + '/confirm', {
+            method: 'POST',
+            body: JSON.stringify({ applicationId }),
+          });
+        });
+      });
+    }
+
+    async function refreshCommandCenter() {
+      const data = await api('/mortgage-au/command-center');
+      renderCommandCenter(data.data || {});
+      return data;
+    }
+
+    function renderTouchpoints(items) {
+      const root = $('touchpointsPanel');
+      if (!root) return;
+      root.innerHTML = '';
+      if (!Array.isArray(items) || items.length === 0) {
+        root.innerHTML = '<div class="queueItem"><div class="title">No touchpoints loaded</div></div>';
+        return;
+      }
+      root.innerHTML = items.map((item) =>
+        '<div class="queueItem">' +
+          '<div class="title">' + item.key + '</div>' +
+          '<div class="meta">' + [item.lifecycle, item.recommendedQueue, item.eligibleCount + ' eligible', 'cooldown ' + item.cooldownHours + 'h'].join(' · ') + '</div>' +
+          '<div class="small" style="margin-top:6px;">Last confirmed: ' + (item.lastConfirmedAt ? fmtTime(item.lastConfirmedAt) : 'Never') + '</div>' +
+          '<div class="actions">' +
+            '<button class="ghost js-touchpoint-preview" data-touchpoint-key="' + item.key + '">Preview</button>' +
+            '<button class="secondary js-touchpoint-confirm" data-touchpoint-key="' + item.key + '">Confirm Draft</button>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+
+      const bind = (selector, handler) => {
+        document.querySelectorAll(selector).forEach((button) => {
+          button.onclick = () => wrapAction(selector, () => handler(button.dataset.touchpointKey));
+        });
+      };
+      bind('.js-touchpoint-preview', async (key) => {
+        const appId = $('touchpointApplicationId')?.value.trim() || $('contextApplicationId').value.trim();
+        if (!appId) throw new Error('Enter an Application ID for touchpoint preview');
+        return api('/mortgage-au/touchpoints/' + encodeURIComponent(key) + '/preview?applicationId=' + encodeURIComponent(appId));
+      });
+      bind('.js-touchpoint-confirm', async (key) => {
+        const appId = $('touchpointApplicationId')?.value.trim() || $('contextApplicationId').value.trim();
+        if (!appId) throw new Error('Enter an Application ID for touchpoint confirm');
+        return api('/mortgage-au/touchpoints/' + encodeURIComponent(key) + '/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ applicationId: appId }),
+        });
+      });
+
+      const newsletter = items.find((item) => item.key === 'mortgage_newsletter');
+      const reminder = $('newsletterReminder');
+      if (reminder) {
+        if (!newsletter?.lastConfirmedAt) {
+          reminder.textContent = 'Newsletter reminder: no recent newsletter draft found.';
+        } else {
+          const ageDays = Math.floor((Date.now() - new Date(newsletter.lastConfirmedAt).getTime()) / (1000 * 60 * 60 * 24));
+          reminder.textContent = ageDays > 7 ? 'Newsletter reminder: last draft is older than 7 days.' : 'Newsletter cadence is within 7 days.';
+        }
+      }
+    }
+
+    async function refreshTouchpoints() {
+      const data = await api('/mortgage-au/touchpoints');
+      renderTouchpoints(data.data || []);
+      return data;
+    }
+
     async function refreshEngagementEvents() {
       const data = await api('/events/recent?kind=engagement&limit=20');
       renderEvents(data.data || []);
@@ -660,7 +786,13 @@ export function renderSidecarUi(config: AppConfig): string {
       try {
         const result = await fn();
         writeLog({ action: label, result });
-        await Promise.all([refreshStatus(), refreshDashboard(), refreshEngagementEvents()]);
+        await Promise.all([
+          refreshStatus(),
+          refreshDashboard(),
+          refreshEngagementEvents(),
+          $('refreshCommandCenterBtn') ? refreshCommandCenter() : Promise.resolve(),
+          $('refreshTouchpointsBtn') ? refreshTouchpoints() : Promise.resolve(),
+        ]);
       } catch (err) {
         writeLog({ action: label, error: err && err.message ? err.message : String(err) });
       } finally {
@@ -681,6 +813,8 @@ export function renderSidecarUi(config: AppConfig): string {
     $('refreshDashboardBtn').onclick = () => wrapAction('refresh-dashboard', refreshDashboard);
     $('docsChaseBtn').onclick = () => wrapAction('run-docs-chase', runDocsChaseWorkflow);
     $('reviewSweepBtn').onclick = () => wrapAction('run-review-sweep', runReviewSweepWorkflow);
+    if ($('refreshCommandCenterBtn')) $('refreshCommandCenterBtn').onclick = () => wrapAction('refresh-command-center', refreshCommandCenter);
+    if ($('refreshTouchpointsBtn')) $('refreshTouchpointsBtn').onclick = () => wrapAction('refresh-touchpoints', refreshTouchpoints);
 
     applyPrefills();
     (async () => {
@@ -689,6 +823,8 @@ export function renderSidecarUi(config: AppConfig): string {
         await refreshTemplates();
         await refreshDashboard();
         await refreshEngagementEvents();
+        if ($('refreshCommandCenterBtn')) await refreshCommandCenter();
+        if ($('refreshTouchpointsBtn')) await refreshTouchpoints();
       } catch (err) {
         writeLog(err && err.message ? err.message : String(err));
       }

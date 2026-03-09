@@ -228,6 +228,7 @@ export function renderPublicSite(content: WebsiteContent): string {
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       status.textContent = 'Submitting enquiry...';
+      const search = new URLSearchParams(window.location.search);
       const payload = {
         firstName: document.getElementById('leadFirstName').value.trim(),
         lastName: document.getElementById('leadLastName').value.trim(),
@@ -237,6 +238,15 @@ export function renderPublicSite(content: WebsiteContent): string {
         message: [message.value.trim(), messageHint.value.trim() ? 'Best time to contact: ' + messageHint.value.trim() : '']
           .filter(Boolean)
           .join('\\n\\n'),
+        consentMarketing: true,
+        consentCopyVersion: 'privacy_v1',
+        utm_source: search.get('utm_source') || undefined,
+        utm_medium: search.get('utm_medium') || undefined,
+        utm_campaign: search.get('utm_campaign') || undefined,
+        utm_term: search.get('utm_term') || undefined,
+        utm_content: search.get('utm_content') || undefined,
+        landing_path: window.location.pathname,
+        referrer: document.referrer || undefined,
       };
 
       try {

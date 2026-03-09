@@ -285,42 +285,84 @@ export class TwentyClient {
   }
 
   async createPublicLead(lead: PublicLead): Promise<PublicLeadResult> {
-    const created = await this.graphqlRequest<{ createPerson?: { id?: string } }>(
+    return this.createMortgageWebsiteLead(lead);
+  }
+
+  async createMortgageWebsiteLead(lead: PublicLead): Promise<PublicLeadResult> {
+    const now = new Date().toISOString();
+    const existing = await this.getContactByEmail(lead.email);
+
+    let personId = getString(existing?.id) ?? undefined;
+    if (!personId) {
+      const created = await this.graphqlRequest<{ createPerson?: { id?: string } }>(
+        `
+          mutation CreatePublicLead($data: PersonCreateInput!) {
+            createPerson(data: $data) {
+              id
+            }
+          }
+        `,
+        {
+          data: {
+            name: {
+              firstName: lead.firstName,
+              ...(lead.lastName ? { lastName: lead.lastName } : {}),
+            },
+            emails: {
+              primaryEmail: lead.email,
+            },
+            ...(lead.phone
+              ? {
+                  phones: {
+                    primaryPhoneNumber: lead.phone,
+                    primaryPhoneCountryCode: 'AU',
+                    primaryPhoneCallingCode: '+61',
+                  },
+                }
+              : {}),
+            ...(lead.loanType ? { jobTitle: `${lead.loanType} enquiry` } : {}),
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      );
+      personId = created.createPerson?.id;
+    }
+
+    if (!personId) {
+      throw new Error('Twenty person upsert did not return an id');
+    }
+
+    const applicationType =
+      (lead.loanType ?? '').toLowerCase().includes('commercial') ? 'commercial_loan' : 'retail_home_loan';
+    const applicationId = `WEB-${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 12)}`;
+
+    const createdApplication = await this.graphqlRequest<{ createLoanApplication?: { id?: string } }>(
       `
-        mutation CreatePublicLead($data: PersonCreateInput!) {
-          createPerson(data: $data) {
+        mutation CreateLoanApplication($data: LoanApplicationCreateInput!) {
+          createLoanApplication(data: $data) {
             id
           }
         }
       `,
       {
         data: {
-          name: {
-            firstName: lead.firstName,
-            ...(lead.lastName ? { lastName: lead.lastName } : {}),
-          },
-          emails: {
-            primaryEmail: lead.email,
-          },
-          ...(lead.phone
-            ? {
-                phones: {
-                  primaryPhoneNumber: lead.phone,
-                  primaryPhoneCountryCode: 'AU',
-                  primaryPhoneCallingCode: '+61',
-                },
-              }
-            : {}),
-          ...(lead.loanType ? { jobTitle: `${lead.loanType} enquiry` } : {}),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          applicationid: applicationId,
+          applicationtype: applicationType,
+          pipelinestage: 'lead_captured',
+          borrowername: [lead.firstName, lead.lastName].filter(Boolean).join(' ').trim() || lead.email,
+          contactpersonrecordid: personId,
+          loanpurpose: 'purchase',
+          notessummary: this.buildRichText(lead.message ?? 'Website enquiry'),
+          updatedAt: now,
+          createdAt: now,
         },
       },
     );
 
-    const personId = created.createPerson?.id;
-    if (!personId) {
-      throw new Error('Twenty person creation did not return an id');
+    const loanApplicationId = createdApplication.createLoanApplication?.id;
+    if (!loanApplicationId) {
+      throw new Error('Twenty loan application creation did not return an id');
     }
 
     const note = await this.graphqlRequest<{ createNote?: { id?: string } }>(
@@ -343,10 +385,18 @@ export class TwentyClient {
               ...(lead.phone ? [`- phone: ${lead.phone}`] : []),
               ...(lead.loanType ? [`- loanType: ${lead.loanType}`] : []),
               ...(lead.message ? [`- message: ${lead.message}`] : []),
+              `- consentMarketing: ${String(Boolean(lead.consentMarketing))}`,
+              ...(lead.consentTimestamp ? [`- consentTimestamp: ${lead.consentTimestamp}`] : []),
+              ...(lead.consentCopyVersion ? [`- consentCopyVersion: ${lead.consentCopyVersion}`] : []),
+              ...(lead.attribution
+                ? Object.entries(lead.attribution)
+                    .filter(([, value]) => value)
+                    .map(([key, value]) => `- ${key}: ${String(value)}`)
+                : []),
             ].join('\n'),
           ),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
         },
       },
     );
@@ -358,11 +408,29 @@ export class TwentyClient {
         body: {
           noteId,
           targetPersonId: personId,
+          targetLoanApplicationId: loanApplicationId,
         },
       });
     }
 
-    return { personId, noteId };
+    let taskId: string | undefined;
+    try {
+      const assigneeId = await this.getDefaultAssigneeId();
+      if (assigneeId) {
+        taskId = await this.createWorkflowTask({
+          title: 'Initial contact - website enquiry',
+          bodyMarkdown: `Contact lead within 24h.\\n\\nApplication: ${applicationId}\\nSource: website`,
+          assigneeId,
+          dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          personId,
+          loanApplicationId,
+        });
+      }
+    } catch {
+      // Task creation is best-effort to keep lead intake resilient.
+    }
+
+    return { personId, applicationId: loanApplicationId, taskId, noteId };
   }
 
   async writeEngagement(event: EngagementEvent): Promise<void> {
@@ -764,6 +832,7 @@ function mapMortgageApplicationNodeToContext(application: MortgageApplicationNod
       loanAmount: microsToAmount(application.loanamount?.amountMicros),
       estimatedPropertyValue: microsToAmount(application.estimatedpropertyvalue?.amountMicros),
       currencyCode: application.loanamount?.currencyCode ?? application.estimatedpropertyvalue?.currencyCode ?? 'AUD',
+      updatedAt: application.updatedAt,
     },
     checklist: {
       requiredSummary,

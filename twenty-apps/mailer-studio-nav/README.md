@@ -1,6 +1,11 @@
 # Mailer Studio Nav (Twenty App)
 
-Minimal Twenty App (official apps alpha mechanism) that adds a `Mailer Studio` navigation item and links to the connector-hosted Mailer Studio UI.
+Minimal Twenty App (official apps alpha mechanism) that adds mortgage operator navigation items in Twenty and links to the connector-hosted Mailer Studio UI.
+
+## Navigation items created
+- `Mailer Studio`
+- `Mortgage Command Center`
+- `Mortgage Ops Dashboard`
 
 ## Why external link?
 This repo does not vendor or patch Twenty's frontend source. To keep changes minimal and isolated, the UI is hosted in the connector (`http://localhost:4010/`) and this app adds a nav entry in Twenty.

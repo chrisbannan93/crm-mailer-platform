@@ -201,7 +201,7 @@ export function renderSidecarUi(config: AppConfig): string {
         <p class="small" style="margin-top:10px;">Contact sync is bounded and cursor-based. List sync performs a full segment membership recompute.</p>
       </section>
 
-      <section class="panel col-8">
+      <section id="commandCenterSection" class="panel col-8">
         <h2>Portfolio Dashboard</h2>
         <div id="dashboardMetrics" class="metricCards"></div>
         <div class="grid" style="margin-top:12px;">
@@ -217,7 +217,7 @@ export function renderSidecarUi(config: AppConfig): string {
       </section>
 
       ${config.vertical === 'mortgage_au' ? `
-      <section class="panel col-8">
+      <section id="opsDashboardSection" class="panel col-8">
         <h2>Mortgage Command Center</h2>
         <p class="small">Action-first work queues with recommended touchpoint actions.</p>
         <div class="btnRow" style="margin-top:10px;">
@@ -242,7 +242,7 @@ export function renderSidecarUi(config: AppConfig): string {
         <div id="opsWorkflows" class="queueList" style="margin-top:12px;"></div>
       </section>
 
-      <section class="panel col-4">
+      <section id="touchpointsSection" class="panel col-4">
         <h2>Touchpoints</h2>
         <p class="small">Eligibility, cooldown visibility, and one-click preview/confirm drafts.</p>
         <label class="small" for="touchpointApplicationId">Application ID (for preview/confirm)</label>
@@ -443,6 +443,21 @@ export function renderSidecarUi(config: AppConfig): string {
         banner.style.display = 'block';
         banner.textContent = 'Prefilled from CRM context: ' + messages.join(', ') + '.';
       }
+    }
+
+    function applyPanelFocus() {
+      const panel = params.get('panel');
+      if (!panel) return;
+      const idByPanel = {
+        command_center: 'commandCenterSection',
+        ops_dashboard: 'opsDashboardSection',
+        touchpoints: 'touchpointsSection',
+      };
+      const target = document.getElementById(idByPanel[panel] || '');
+      if (!target) return;
+      target.style.borderColor = '#1f6d5e';
+      target.style.boxShadow = '0 0 0 2px rgba(31,109,94,.2), 0 10px 30px rgba(17,24,39,.05)';
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async function refreshStatus() {
@@ -952,6 +967,7 @@ export function renderSidecarUi(config: AppConfig): string {
     if ($('runNewsletterCadenceBtn')) $('runNewsletterCadenceBtn').onclick = () => wrapAction('run-newsletter-cadence', () => runWorkflow('/workflows/mortgage/newsletter-cadence'));
 
     applyPrefills();
+    applyPanelFocus();
     (async () => {
       try {
         await refreshStatus();

@@ -4,7 +4,7 @@
 Mailer Studio is the internal operator UI for this platform. It is hosted by the connector service at `/studio` and linked from Twenty using a small Twenty App nav item.
 
 What you get:
-- `Mailer Studio` nav item in Twenty (official Twenty apps alpha extension path)
+- `Mailer Studio`, `Mortgage Command Center`, and `Mortgage Ops Dashboard` nav items in Twenty (official Twenty apps alpha extension path)
 - connector-hosted UI with:
   - live mortgage portfolio dashboard
   - connection status (Twenty + listmonk)
@@ -47,6 +47,9 @@ Open:
 Install the nav app from `twenty-apps/mailer-studio-nav/` using the current Twenty Apps alpha workflow for your installed Twenty version.
 
 After installation, click the `Mailer Studio` item in the Twenty navigation.
+For direct deep-links from Twenty nav:
+- `Mortgage Command Center` opens `/studio?panel=command_center`
+- `Mortgage Ops Dashboard` opens `/studio?panel=ops_dashboard`
 
 ## What the UI does
 ### Connection status

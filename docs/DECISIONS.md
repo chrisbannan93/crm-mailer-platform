@@ -94,3 +94,9 @@
 - Why: Mortgage audience lists should follow the actual application book, not hand-maintained contact tags.
 - Alternatives: Maintain tags manually in Twenty, or keep only coarse retail/commercial segment lists.
 - Impact: The mortgage vertical now derives additional segment keys such as `settled_last_90_days`, `annual_review_due`, and `fixed_rate_expiry` from live Loan Application state and checklist status.
+
+### 2026-03-09 - Add generic connector hooks for vertical touchpoint orchestration (mortgage-first)
+- Status: Accepted
+- Why: The mortgage demo needed a configurable touchpoint registry, command-center queueing, and confirm-time draft/audit behavior without hardcoding business rules in connector core.
+- Alternatives: Keep all touchpoint orchestration inside a mortgage-only script, or duplicate queue logic in the UI.
+- Impact: Connector now exposes reusable touchpoint/command-center endpoint patterns while keeping mortgage rules/config under `verticals/mortgage_au/config/*`; this unblocks future verticals from reusing the same API surface by supplying their own rules.

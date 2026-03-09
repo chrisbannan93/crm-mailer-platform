@@ -166,6 +166,41 @@ curl -X POST http://localhost:4010/campaigns/send-template \
   }'
 ```
 
+### Mortgage touchpoint endpoints
+List touchpoints and eligibility counts:
+```bash
+curl http://localhost:4010/mortgage-au/touchpoints | jq .
+```
+
+Eligible records for a touchpoint:
+```bash
+curl 'http://localhost:4010/mortgage-au/touchpoints/eligible?key=retail_documents_request' | jq .
+```
+
+Preview touchpoint for an application:
+```bash
+curl 'http://localhost:4010/mortgage-au/touchpoints/retail_documents_request/preview?applicationId=APP-001' | jq .
+```
+
+Confirm (draft only) with cooldown protection:
+```bash
+curl -X POST http://localhost:4010/mortgage-au/touchpoints/retail_documents_request/confirm \
+  -H 'Content-Type: application/json' \
+  -d '{"applicationId":"APP-001","actor":"demo-user"}' | jq .
+```
+
+Confirm with override:
+```bash
+curl -X POST http://localhost:4010/mortgage-au/touchpoints/retail_documents_request/confirm \
+  -H 'Content-Type: application/json' \
+  -d '{"applicationId":"APP-001","actor":"demo-user","override":true}' | jq .
+```
+
+Command center snapshot:
+```bash
+curl http://localhost:4010/mortgage-au/command-center | jq .
+```
+
 ## Troubleshooting
 
 ### `make up` fails because env files are missing

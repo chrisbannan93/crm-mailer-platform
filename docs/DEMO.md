@@ -1,5 +1,25 @@
 # DEMO CHECKLIST
 
+## 2-Minute Script (v0.3)
+1. Open `http://localhost:4010/studio` (VERTICAL=`mortgage_au`) and show:
+- `Mortgage Command Center` queues.
+- each row has `Recommended: <touchpoint>`.
+2. Open `http://localhost:4010/`, submit the lead form, then return to studio log and show:
+- `WEBSITE_LEAD_RECEIVED`
+- `TASK_CREATED`
+- `TOUCHPOINT_DRAFT_CREATED welcome_onboarding`.
+3. In `Mortgage Command Center`, open a `Docs Outstanding` row:
+- click `Preview` for `retail_documents_request` or `commercial_documents_request`.
+- confirm missing docs are in preview payload.
+- click `Confirm Draft`.
+4. Open `Touchpoints` panel:
+- show lifecycle-grouped keys with `eligibleCount` and `Last confirmed`.
+- set `Application ID` and run `Preview` / `Confirm Draft`.
+- confirm cooldown by running the same confirm twice (blocked unless override API flag used).
+5. Show newsletter helper tile:
+- use `Open listmonk` to create weekly `mortgage_newsletter` campaign draft.
+- reminder warns when last newsletter draft is older than 7 days.
+
 ## Goal
 Demonstrate the local platform plus the Mortgage AU MVP using Twenty, listmonk, connector, Mailpit, and the mortgage vertical assets.
 

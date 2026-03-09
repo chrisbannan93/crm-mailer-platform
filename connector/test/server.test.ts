@@ -77,6 +77,18 @@ function makeServiceMock() {
       overridesToday: 0,
       touchpointErrorsToday: 0,
     }),
+    getMortgageOpsDashboard: vi.fn().mockResolvedValue({
+      generatedAt: new Date().toISOString(),
+      execution: { draftsCreatedToday: 0, dedupeBlockedToday: 0, overridesToday: 0, touchpointErrorsToday: 0 },
+      pipelineHealth: { countsByStage: [], avgAgeInStageDays: [], slaBreaches: { firstContact24h: 0, docsPending48h: 0, lenderStale5d: 0 } },
+      workflows: [],
+      touchpoints: [],
+    }),
+    runFirstContactSlaWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'first_contact_sla', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
+    runSubmissionStaleWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'submission_stale_follow_up', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
+    runPostSettlementNurtureWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'post_settlement_nurture', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
+    runConsentGapWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'consent_gap_queue', processed: 0, taskCount: 0, sentCount: 0, skippedCount: 0, results: [] }),
+    runNewsletterCadenceWorkflow: vi.fn().mockResolvedValue({ workflowKey: 'newsletter_cadence_guardrail', processed: 1, taskCount: 0, sentCount: 0, skippedCount: 1, results: [] }),
     getStudioContextForApplication: vi.fn(),
     getStudioContextForPerson: vi.fn(),
     buildStudioLaunchUrl: vi.fn().mockReturnValue('/studio?applicationId=APP-001'),
@@ -262,5 +274,23 @@ describe('server', () => {
 
     expect(res.status).toBe(200);
     expect(service.getTouchpointAuditSummary).toHaveBeenCalled();
+  });
+
+  it('returns mortgage ops dashboard', async () => {
+    const service = makeServiceMock();
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).get('/mortgage-au/ops-dashboard');
+
+    expect(res.status).toBe(200);
+    expect(service.getMortgageOpsDashboard).toHaveBeenCalled();
+  });
+
+  it('runs mortgage first-contact SLA workflow', async () => {
+    const service = makeServiceMock();
+    const app = createServer(makeConfig(), service, makeWebsiteContent());
+    const res = await request(app).post('/workflows/mortgage/first-contact-sla').send({ dryRun: true });
+
+    expect(res.status).toBe(200);
+    expect(service.runFirstContactSlaWorkflow).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
   });
 });

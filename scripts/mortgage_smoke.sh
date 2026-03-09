@@ -24,4 +24,9 @@ curl -fsS "$BASE_URL/mortgage-au/audit-summary" | jq .
 printf '\n[6/6] recent events\n'
 curl -fsS "$BASE_URL/events/recent?limit=10" | jq '.data | map({kind, status, message})'
 
+printf '\n[extra] ops dashboard + workflow dry-runs\n'
+curl -fsS "$BASE_URL/mortgage-au/ops-dashboard" | jq '.data.pipelineHealth.slaBreaches'
+curl -fsS -X POST "$BASE_URL/workflows/mortgage/first-contact-sla" -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq '.data.workflowKey, .data.processed'
+curl -fsS -X POST "$BASE_URL/workflows/mortgage/newsletter-cadence" -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq '.data.workflowKey, .data.processed'
+
 printf '\nSmoke run complete.\n'

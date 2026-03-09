@@ -202,6 +202,20 @@ Command center snapshot:
 curl http://localhost:4010/mortgage-au/command-center | jq .
 ```
 
+Ops dashboard snapshot:
+```bash
+curl http://localhost:4010/mortgage-au/ops-dashboard | jq .
+```
+
+Run low-hanging mortgage workflows:
+```bash
+curl -X POST http://localhost:4010/workflows/mortgage/first-contact-sla -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq .
+curl -X POST http://localhost:4010/workflows/mortgage/submission-stale -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq .
+curl -X POST http://localhost:4010/workflows/mortgage/post-settlement-nurture -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq .
+curl -X POST http://localhost:4010/workflows/mortgage/consent-gap -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq .
+curl -X POST http://localhost:4010/workflows/mortgage/newsletter-cadence -H 'Content-Type: application/json' -d '{"dryRun":true}' | jq .
+```
+
 ## Troubleshooting
 
 ### `make up` fails because env files are missing

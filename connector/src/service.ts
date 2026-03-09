@@ -261,6 +261,13 @@ export class ConnectorService {
           },
         });
       }
+      if (result.applicationId) {
+        this.deps.store.setState(`mortgage.consent.${result.applicationId}`, {
+          consentMarketing: Boolean(lead.consentMarketing),
+          consentTimestamp: lead.consentTimestamp ?? nowIso(),
+          consentCopyVersion: lead.consentCopyVersion ?? 'privacy_v1',
+        });
+      }
       if (result.applicationId && lead.consentMarketing !== false) {
         try {
           const context = await this.getStudioContextForApplication(result.applicationId);
@@ -603,6 +610,279 @@ export class ConnectorService {
         },
         { key: 'upcoming_settlements', label: 'Upcoming Settlements (14 days)', items: upcomingSettlements },
       ],
+    };
+  }
+
+  async getMortgageOpsDashboard(): Promise<{
+    generatedAt: string;
+    execution: ReturnType<ConnectorService['getTouchpointAuditSummary']>;
+    pipelineHealth: {
+      countsByStage: Array<{ stage: string; count: number }>;
+      avgAgeInStageDays: Array<{ stage: string; ageDays: number }>;
+      slaBreaches: {
+        firstContact24h: number;
+        docsPending48h: number;
+        lenderStale5d: number;
+      };
+    };
+    workflows: Array<{
+      key: string;
+      label: string;
+      count: number;
+      applications: Array<
+        StudioDashboard['attention'][number] & {
+          ageInStageDays: number;
+          reason: string;
+          recommendedTouchpointKey: string;
+        }
+      >;
+    }>;
+    touchpoints: Array<{
+      key: string;
+      eligibleCount: number;
+      lastConfirmedAt?: string;
+      stuckEligibleCount: number;
+    }>;
+  }> {
+    const attention = await this.getAttentionRowsWithContext();
+    const stageCounts = new Map<string, number>();
+    const ageByStage = new Map<string, { total: number; count: number }>();
+    for (const entry of attention) {
+      const stage = entry.row.pipelineStage ?? 'unknown';
+      stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + 1);
+      const agg = ageByStage.get(stage) ?? { total: 0, count: 0 };
+      agg.total += entry.ageInStageDays;
+      agg.count += 1;
+      ageByStage.set(stage, agg);
+    }
+
+    const firstContactCandidates = attention.filter((entry) =>
+      ['lead_captured', 'discovery_booked'].includes((entry.row.pipelineStage ?? '').toLowerCase()) && entry.ageInStageDays > 1,
+    );
+    const docsPendingCandidates = attention.filter((entry) => entry.row.pendingRequiredDocs > 0 && entry.ageInStageDays > 2);
+    const lenderStaleCandidates = attention.filter((entry) =>
+      ['submitted', 'indicative_offer', 'conditional_approval', 'formal_approval'].includes((entry.row.pipelineStage ?? '').toLowerCase()) &&
+      entry.ageInStageDays > 5,
+    );
+    const settlementNurtureCandidates = attention.filter((entry) => {
+      const stage = (entry.row.pipelineStage ?? '').toLowerCase();
+      if (stage !== 'settled') return false;
+      const settlementDate = entry.context.application.targetSettlementDate;
+      if (!settlementDate) return false;
+      const days = Math.floor((Date.now() - new Date(settlementDate).getTime()) / (1000 * 60 * 60 * 24));
+      return [30, 90].some((milestone) => Math.abs(days - milestone) <= 7);
+    });
+    const consentGapCandidates = attention.filter((entry) => {
+      const appId = entry.row.applicationId;
+      const consent = this.getConsentStateForApplication(appId);
+      return consent?.consentMarketing === false;
+    });
+
+    const touchpointCatalog = await this.getTouchpointCatalog();
+    const touchpointRows = await this.getEligibleTouchpointsByKey();
+    const touchpoints = touchpointCatalog.map((item) => {
+      const rows = touchpointRows.get(item.key) ?? [];
+      const stuckEligibleCount = rows.filter((row) => {
+        const state = this.deps.store.getState<{ lastConfirmedAt?: string }>(
+          this.getTouchpointStoreKey(item.key, row.applicationId),
+        );
+        return !state?.lastConfirmedAt;
+      }).length;
+      return {
+        key: item.key,
+        eligibleCount: item.eligibleCount,
+        lastConfirmedAt: item.lastConfirmedAt,
+        stuckEligibleCount,
+      };
+    });
+
+    const workflowRows = (candidates: typeof attention, reason: string) =>
+      candidates.slice(0, 8).map((entry) => ({
+        ...entry.row,
+        ageInStageDays: entry.ageInStageDays,
+        reason,
+        recommendedTouchpointKey: pickRecommendedTouchpointKey(entry.row),
+      }));
+
+    return {
+      generatedAt: nowIso(),
+      execution: this.getTouchpointAuditSummary(),
+      pipelineHealth: {
+        countsByStage: Array.from(stageCounts.entries()).map(([stage, count]) => ({ stage, count })),
+        avgAgeInStageDays: Array.from(ageByStage.entries()).map(([stage, value]) => ({
+          stage,
+          ageDays: Number((value.total / Math.max(value.count, 1)).toFixed(1)),
+        })),
+        slaBreaches: {
+          firstContact24h: firstContactCandidates.length,
+          docsPending48h: docsPendingCandidates.length,
+          lenderStale5d: lenderStaleCandidates.length,
+        },
+      },
+      workflows: [
+        {
+          key: 'first_contact_sla',
+          label: 'First Contact SLA Breach',
+          count: firstContactCandidates.length,
+          applications: workflowRows(firstContactCandidates, 'No first contact within 24h'),
+        },
+        {
+          key: 'submission_stale_follow_up',
+          label: 'Submission Stale Follow-up',
+          count: lenderStaleCandidates.length,
+          applications: workflowRows(lenderStaleCandidates, 'No lender-stage update for 5+ days'),
+        },
+        {
+          key: 'post_settlement_nurture',
+          label: 'Post-Settlement 30/90 Day Nurture',
+          count: settlementNurtureCandidates.length,
+          applications: workflowRows(settlementNurtureCandidates, 'In 30/90 day settlement nurture window'),
+        },
+        {
+          key: 'consent_gap_queue',
+          label: 'Consent Gap Queue',
+          count: consentGapCandidates.length,
+          applications: workflowRows(consentGapCandidates, 'Marketing consent missing'),
+        },
+      ],
+      touchpoints,
+    };
+  }
+
+  async runFirstContactSlaWorkflow(input?: { applicationIds?: string[]; limit?: number; dryRun?: boolean }): Promise<StudioWorkflowRunResult> {
+    const rows = (await this.getMortgageOpsDashboard()).workflows.find((workflow) => workflow.key === 'first_contact_sla')?.applications ?? [];
+    return this.runTouchpointWorkflowRows({
+      workflowKey: 'first_contact_sla',
+      rows: selectWorkflowRows(rows, input?.applicationIds, input?.limit ?? 6),
+      dryRun: input?.dryRun === true,
+      touchpointKeyForRow: () => 'fact_find_booking',
+      buildTaskTitle: (row) => `${row.applicationId} Escalate first contact`,
+      buildTaskBody: (context) =>
+        `SLA breach: first contact not completed within 24h for ${context.application.applicationId ?? context.application.id}.`,
+      dueInHours: 12,
+    });
+  }
+
+  async runSubmissionStaleWorkflow(input?: { applicationIds?: string[]; limit?: number; dryRun?: boolean }): Promise<StudioWorkflowRunResult> {
+    const rows =
+      (await this.getMortgageOpsDashboard()).workflows.find((workflow) => workflow.key === 'submission_stale_follow_up')?.applications ?? [];
+    return this.runTouchpointWorkflowRows({
+      workflowKey: 'submission_stale_follow_up',
+      rows: selectWorkflowRows(rows, input?.applicationIds, input?.limit ?? 6),
+      dryRun: input?.dryRun === true,
+      touchpointKeyForRow: (row) =>
+        row.applicationType === 'commercial_loan' ? 'commercial_submission_confirmation' : 'retail_submission_confirmation',
+      buildTaskTitle: (row) => `${row.applicationId} Follow up lender status`,
+      buildTaskBody: (context) =>
+        `Submission stale follow-up for ${context.application.applicationId ?? context.application.id}. Check lender progress.`,
+      dueInHours: 24,
+    });
+  }
+
+  async runPostSettlementNurtureWorkflow(input?: { applicationIds?: string[]; limit?: number; dryRun?: boolean }): Promise<StudioWorkflowRunResult> {
+    const rows =
+      (await this.getMortgageOpsDashboard()).workflows.find((workflow) => workflow.key === 'post_settlement_nurture')?.applications ?? [];
+    return this.runTouchpointWorkflowRows({
+      workflowKey: 'post_settlement_nurture',
+      rows: selectWorkflowRows(rows, input?.applicationIds, input?.limit ?? 6),
+      dryRun: input?.dryRun === true,
+      touchpointKeyForRow: (row) =>
+        row.applicationType === 'commercial_loan'
+          ? 'commercial_cross_sell'
+          : row.ageInStageDays > 75
+            ? 'investor_cross_sell'
+            : 'referral_request',
+      buildTaskTitle: (row) => `${row.applicationId} Run post-settlement nurture`,
+      buildTaskBody: (context) =>
+        `Post-settlement nurture follow-up for ${context.application.applicationId ?? context.application.id}.`,
+      dueInHours: 48,
+    });
+  }
+
+  async runConsentGapWorkflow(input?: { applicationIds?: string[]; limit?: number; dryRun?: boolean }): Promise<StudioWorkflowRunResult> {
+    const rows = (await this.getMortgageOpsDashboard()).workflows.find((workflow) => workflow.key === 'consent_gap_queue')?.applications ?? [];
+    return this.runTouchpointWorkflowRows({
+      workflowKey: 'consent_gap_queue',
+      rows: selectWorkflowRows(rows, input?.applicationIds, input?.limit ?? 6),
+      dryRun: input?.dryRun === true,
+      touchpointKeyForRow: () => 'welcome_onboarding',
+      buildTaskTitle: (row) => `${row.applicationId} Capture marketing consent`,
+      buildTaskBody: (context) =>
+        `Consent gap detected for ${context.application.applicationId ?? context.application.id}. Contact borrower and capture consent.`,
+      dueInHours: 24,
+      skipTouchpointConfirm: true,
+    });
+  }
+
+  async runNewsletterCadenceWorkflow(input?: { dryRun?: boolean }): Promise<{
+    workflowKey: string;
+    dryRun?: boolean;
+    processed: number;
+    taskCount: number;
+    sentCount: number;
+    skippedCount: number;
+    results: Array<{ applicationId: string; action: 'task' | 'skipped'; reason?: string; taskId?: string }>;
+  }> {
+    const lastConfirmedAt = this.deps.store.getState<string>('touchpoint.lastConfirmed.mortgage_newsletter');
+    const lastAgeDays = lastConfirmedAt
+      ? Math.floor((Date.now() - new Date(lastConfirmedAt).getTime()) / (1000 * 60 * 60 * 24))
+      : 999;
+    const due = lastAgeDays > 7;
+    if (!due) {
+      return {
+        workflowKey: 'newsletter_cadence_guardrail',
+        dryRun: input?.dryRun === true,
+        processed: 1,
+        taskCount: 0,
+        sentCount: 0,
+        skippedCount: 1,
+        results: [{ applicationId: 'global', action: 'skipped', reason: `Last newsletter draft ${lastAgeDays} day(s) ago` }],
+      };
+    }
+
+    const assigneeId = await this.deps.twenty.getDefaultAssigneeId?.();
+    if (!assigneeId || !this.deps.twenty.createWorkflowTask) {
+      return {
+        workflowKey: 'newsletter_cadence_guardrail',
+        dryRun: input?.dryRun === true,
+        processed: 1,
+        taskCount: 0,
+        sentCount: 0,
+        skippedCount: 1,
+        results: [{ applicationId: 'global', action: 'skipped', reason: 'No assignee available for reminder task' }],
+      };
+    }
+    if (input?.dryRun === true) {
+      return {
+        workflowKey: 'newsletter_cadence_guardrail',
+        dryRun: true,
+        processed: 1,
+        taskCount: 1,
+        sentCount: 0,
+        skippedCount: 0,
+        results: [{ applicationId: 'global', action: 'task', taskId: 'dry-run' }],
+      };
+    }
+    const taskId = await this.deps.twenty.createWorkflowTask({
+      title: 'Create weekly mortgage newsletter draft in listmonk',
+      bodyMarkdown: 'Newsletter cadence guardrail fired. Open listmonk and create a new mortgage_newsletter draft campaign.',
+      assigneeId,
+      dueAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    });
+    this.deps.store.addEvent({
+      kind: 'engagement',
+      status: 'ok',
+      message: 'NEWSLETTER_CADENCE_GUARDRAIL_TASK_CREATED',
+      detail: { eventType: 'NEWSLETTER_CADENCE_GUARDRAIL_TASK_CREATED', taskId },
+    });
+    return {
+      workflowKey: 'newsletter_cadence_guardrail',
+      dryRun: false,
+      processed: 1,
+      taskCount: 1,
+      sentCount: 0,
+      skippedCount: 0,
+      results: [{ applicationId: 'global', action: 'task', taskId }],
     };
   }
 
@@ -1294,6 +1574,26 @@ export class ConnectorService {
     return `touchpoint.confirmed.${touchpointKey}.${applicationId}`;
   }
 
+  private getConsentStateForApplication(applicationId: string): { consentMarketing: boolean; consentTimestamp?: string } | undefined {
+    return this.deps.store.getState<{ consentMarketing: boolean; consentTimestamp?: string }>(`mortgage.consent.${applicationId}`);
+  }
+
+  private async getAttentionRowsWithContext(): Promise<
+    Array<{ row: StudioDashboard['attention'][number]; context: StudioTemplateContext; ageInStageDays: number }>
+  > {
+    const dashboard = await this.getStudioDashboard();
+    return Promise.all(
+      dashboard.attention.map(async (row) => {
+        const context = await this.getStudioContextForApplication(row.applicationId);
+        const updatedAt = context.application.updatedAt;
+        const ageInStageDays = updatedAt
+          ? Math.max(0, Math.floor((Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24)))
+          : 0;
+        return { row, context, ageInStageDays };
+      }),
+    );
+  }
+
   private setTouchpointDedupe(input: { touchpointKey: string; applicationId: string; lastConfirmedAt: string }): void {
     this.deps.store.setState(this.getTouchpointStoreKey(input.touchpointKey, input.applicationId), {
       lastConfirmedAt: input.lastConfirmedAt,
@@ -1324,6 +1624,113 @@ export class ConnectorService {
       throw new Error(`Unknown touchpoint key '${key}'`);
     }
     return touchpoint;
+  }
+
+  private async runTouchpointWorkflowRows(input: {
+    workflowKey: string;
+    rows: Array<
+      StudioDashboard['attention'][number] & {
+        ageInStageDays?: number;
+      }
+    >;
+    dryRun: boolean;
+    touchpointKeyForRow(row: StudioDashboard['attention'][number] & { ageInStageDays?: number }): string;
+    buildTaskTitle(row: { applicationId: string }): string;
+    buildTaskBody(context: StudioTemplateContext): string;
+    dueInHours: number;
+    skipTouchpointConfirm?: boolean;
+  }): Promise<StudioWorkflowRunResult> {
+    const existingTaskTitles = new Set(await (this.deps.twenty.listOpenTaskTitles?.() ?? Promise.resolve([])));
+    const assigneeId = await this.deps.twenty.getDefaultAssigneeId?.();
+    const results: StudioWorkflowRunResult['results'] = [];
+    let taskCount = 0;
+    let sentCount = 0;
+    let skippedCount = 0;
+
+    for (const row of input.rows) {
+      const touchpointKey = input.touchpointKeyForRow(row);
+      const context = await this.getStudioContextForApplication(row.applicationId);
+      let taskId: string | undefined;
+      let campaignId: number | undefined;
+      let action: StudioWorkflowRunResult['results'][number]['action'] = 'skipped';
+      let reason: string | undefined;
+
+      if (!input.skipTouchpointConfirm) {
+        if (input.dryRun) {
+          sentCount += 1;
+          action = 'sent';
+        } else {
+          try {
+            const confirmed = await this.confirmTouchpoint({
+              key: touchpointKey,
+              applicationId: row.applicationId,
+              actor: `workflow:${input.workflowKey}`,
+            });
+            campaignId = confirmed.campaignId;
+            sentCount += 1;
+            action = 'sent';
+          } catch (error) {
+            reason = error instanceof Error ? error.message : String(error);
+          }
+        }
+      }
+
+      const taskTitle = input.buildTaskTitle(row);
+      if (assigneeId && this.deps.twenty.createWorkflowTask) {
+        if (existingTaskTitles.has(taskTitle)) {
+          reason = reason ?? 'existing open task';
+        } else if (input.dryRun) {
+          taskId = 'dry-run';
+          taskCount += 1;
+          existingTaskTitles.add(taskTitle);
+          action = action === 'sent' ? 'sent_and_task' : 'task';
+        } else {
+          taskId = await this.deps.twenty.createWorkflowTask({
+            title: taskTitle,
+            bodyMarkdown: input.buildTaskBody(context),
+            assigneeId,
+            dueAt: new Date(Date.now() + input.dueInHours * 60 * 60 * 1000).toISOString(),
+            personId: context.contact.id,
+            loanApplicationId: context.application.id,
+          });
+          taskCount += 1;
+          existingTaskTitles.add(taskTitle);
+          action = action === 'sent' ? 'sent_and_task' : 'task';
+        }
+      }
+
+      if (action === 'skipped') skippedCount += 1;
+      results.push({
+        applicationId: row.applicationId,
+        action,
+        templateKey: touchpointKey,
+        ...(taskId ? { taskId } : {}),
+        ...(campaignId ? { campaignId } : {}),
+        ...(reason ? { reason } : {}),
+      });
+    }
+
+    this.deps.store.addEvent({
+      kind: 'sync',
+      status: 'ok',
+      message: `Workflow ${input.workflowKey} processed ${input.rows.length} applications`,
+      detail: {
+        workflowKey: input.workflowKey,
+        taskCount,
+        sentCount,
+        skippedCount,
+      },
+    });
+
+    return {
+      workflowKey: input.workflowKey,
+      dryRun: input.dryRun,
+      processed: input.rows.length,
+      taskCount,
+      sentCount,
+      skippedCount,
+      results,
+    };
   }
 
   private requireEmailTemplate(templateKey: string): EmailTemplateDefinition {

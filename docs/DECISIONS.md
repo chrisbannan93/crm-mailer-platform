@@ -100,3 +100,9 @@
 - Why: The mortgage demo needed a configurable touchpoint registry, command-center queueing, and confirm-time draft/audit behavior without hardcoding business rules in connector core.
 - Alternatives: Keep all touchpoint orchestration inside a mortgage-only script, or duplicate queue logic in the UI.
 - Impact: Connector now exposes reusable touchpoint/command-center endpoint patterns while keeping mortgage rules/config under `verticals/mortgage_au/config/*`; this unblocks future verticals from reusing the same API surface by supplying their own rules.
+
+### 2026-03-09 - Add mortgage ops dashboard + workflow runners in connector API
+- Status: Accepted
+- Why: Operators need a single action-oriented surface for SLA breaches and low-hanging follow-up workflows, and this requires server-side queue compilation plus guarded workflow execution.
+- Alternatives: Keep workflow logic entirely client-side, or trigger manual touchpoints record-by-record only.
+- Impact: Added `GET /mortgage-au/ops-dashboard` and new mortgage workflow endpoints for first-contact SLA, submission stale follow-up, post-settlement nurture, consent-gap tasks, and newsletter cadence guardrail; all actions still default to draft/task with confirm gates and audit logging.

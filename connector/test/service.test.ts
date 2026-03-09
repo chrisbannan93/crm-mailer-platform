@@ -513,4 +513,65 @@ describe('ConnectorService', () => {
     expect(eventTypes).toContain('TASK_CREATED');
     expect(eventTypes).toContain('TOUCHPOINT_DRAFT_CREATED');
   });
+
+  it('builds mortgage ops dashboard with SLA breach counters', async () => {
+    const listmonk = {
+      listLists: vi.fn().mockResolvedValue([]),
+      ensureList: vi.fn().mockResolvedValue({ id: 1, name: 'CRM Synced Contacts' }),
+      upsertSubscriber: vi.fn().mockResolvedValue({ subscriberId: 1 }),
+      findSubscriberByEmail: vi.fn().mockResolvedValue(null),
+      addSubscriberToLists: vi.fn().mockResolvedValue(undefined),
+      removeSubscriberFromLists: vi.fn().mockResolvedValue(undefined),
+      createCampaign: vi.fn().mockResolvedValue({ id: 99 }),
+      sendCampaignTest: vi.fn().mockResolvedValue(undefined),
+    };
+    const twenty = {
+      listContacts: vi.fn().mockResolvedValue({ contacts: [] }),
+      fetchPersonById: vi.fn(),
+      writeEngagement: vi.fn().mockResolvedValue(undefined),
+      getMortgageDashboard: vi.fn().mockResolvedValue({
+        metrics: [],
+        pipeline: [],
+        attention: [
+          {
+            applicationId: 'APP-1',
+            borrowerName: 'Ava',
+            applicationType: 'retail_home_loan',
+            pipelineStage: 'lead_captured',
+            pendingRequiredDocs: 0,
+            recommendedTemplateKey: 'welcome_onboarding',
+          },
+        ],
+        workflows: [],
+      }),
+      getStudioContextForApplication: vi.fn().mockResolvedValue({
+        contact: { id: 'person_1', email: 'ava@example.com' },
+        broker: {},
+        application: {
+          id: 'loan_1',
+          applicationId: 'APP-1',
+          applicationType: 'retail_home_loan',
+          pipelineStage: 'lead_captured',
+          updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        checklist: { requiredSummary: '', items: [] },
+      }),
+    };
+
+    const service = new ConnectorService({
+      config: { ...makeConfig(), vertical: 'mortgage_au' },
+      store: new MemoryStore(),
+      vertical: { ...vertical, name: 'mortgage_au' },
+      emailTemplates: [
+        { key: 'fact_find_booking', name: 'Fact Find', subject: 'Book now', bodyHtml: '<p>Book</p>' },
+      ],
+      // @ts-expect-error partial mock for this test
+      twenty,
+      // @ts-expect-error partial mock for this test
+      listmonk,
+    });
+
+    const dashboard = await service.getMortgageOpsDashboard();
+    expect(dashboard.pipelineHealth.slaBreaches.firstContact24h).toBe(1);
+  });
 });

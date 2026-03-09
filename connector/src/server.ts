@@ -273,6 +273,14 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
     res.json({ ok: true, data: service.getTouchpointAuditSummary() });
   });
 
+  app.get('/mortgage-au/ops-dashboard', async (_req, res, next) => {
+    try {
+      res.json({ ok: true, data: await service.getMortgageOpsDashboard() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/lists', async (_req, res, next) => {
     try {
       res.json({ data: await service.listLists() });
@@ -408,6 +416,74 @@ export function createServer(config: AppConfig, service: ConnectorService, publi
         createTasks: typeof body.createTasks === 'boolean' ? body.createTasks : undefined,
         sendEmail: typeof body.sendEmail === 'boolean' ? body.sendEmail : undefined,
         dryRun: typeof body.dryRun === 'boolean' ? body.dryRun : undefined,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/mortgage/first-contact-sla', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const result = await service.runFirstContactSlaWorkflow({
+        applicationIds: Array.isArray(body.applicationIds) ? body.applicationIds.map(String) : undefined,
+        limit: typeof body.limit === 'number' ? body.limit : undefined,
+        dryRun: body.dryRun === true,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/mortgage/submission-stale', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const result = await service.runSubmissionStaleWorkflow({
+        applicationIds: Array.isArray(body.applicationIds) ? body.applicationIds.map(String) : undefined,
+        limit: typeof body.limit === 'number' ? body.limit : undefined,
+        dryRun: body.dryRun === true,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/mortgage/post-settlement-nurture', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const result = await service.runPostSettlementNurtureWorkflow({
+        applicationIds: Array.isArray(body.applicationIds) ? body.applicationIds.map(String) : undefined,
+        limit: typeof body.limit === 'number' ? body.limit : undefined,
+        dryRun: body.dryRun === true,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/mortgage/consent-gap', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const result = await service.runConsentGapWorkflow({
+        applicationIds: Array.isArray(body.applicationIds) ? body.applicationIds.map(String) : undefined,
+        limit: typeof body.limit === 'number' ? body.limit : undefined,
+        dryRun: body.dryRun === true,
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/workflows/mortgage/newsletter-cadence', async (req, res, next) => {
+    try {
+      const body = getBody(req);
+      const result = await service.runNewsletterCadenceWorkflow({
+        dryRun: body.dryRun === true,
       });
       res.json({ ok: true, data: result });
     } catch (error) {

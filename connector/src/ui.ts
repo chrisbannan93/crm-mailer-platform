@@ -226,6 +226,22 @@ export function renderSidecarUi(config: AppConfig): string {
         <div id="commandCenterQueues" class="queueList" style="margin-top:12px;"></div>
       </section>
 
+      <section class="panel col-8">
+        <h2>Mortgage Ops Dashboard</h2>
+        <p class="small">SLA breaches, pipeline aging, and low-hanging workflow runners.</p>
+        <div class="btnRow" style="margin-top:10px;">
+          <button id="refreshOpsDashboardBtn" class="ghost">Refresh Ops Dashboard</button>
+          <button id="runFirstContactSlaBtn" class="secondary">Run First Contact SLA</button>
+          <button id="runSubmissionStaleBtn" class="secondary">Run Submission Stale</button>
+          <button id="runSettlementNurtureBtn" class="secondary">Run Settlement Nurture</button>
+          <button id="runConsentGapBtn" class="secondary">Run Consent Gap</button>
+          <button id="runNewsletterCadenceBtn" class="secondary">Run Newsletter Guardrail</button>
+        </div>
+        <div id="opsExecutionSummary" class="small" style="margin-top:10px;"></div>
+        <div id="opsSlaSummary" class="small" style="margin-top:6px;"></div>
+        <div id="opsWorkflows" class="queueList" style="margin-top:12px;"></div>
+      </section>
+
       <section class="panel col-4">
         <h2>Touchpoints</h2>
         <p class="small">Eligibility, cooldown visibility, and one-click preview/confirm drafts.</p>
@@ -331,7 +347,7 @@ export function renderSidecarUi(config: AppConfig): string {
 
     function setBusy(v) {
       busy = v;
-      ['contactSyncBtn','listSyncBtn','refreshStatusBtn','refreshEngagementBtn','refreshAllBtn','previewTemplateBtn','sendTemplateBtn','loadApplicationBtn','loadPersonBtn','sendRecommendedBtn','refreshDashboardBtn','docsChaseBtn','reviewSweepBtn','refreshCommandCenterBtn','refreshTouchpointsBtn','refreshAuditSummaryBtn']
+      ['contactSyncBtn','listSyncBtn','refreshStatusBtn','refreshEngagementBtn','refreshAllBtn','previewTemplateBtn','sendTemplateBtn','loadApplicationBtn','loadPersonBtn','sendRecommendedBtn','refreshDashboardBtn','docsChaseBtn','reviewSweepBtn','refreshCommandCenterBtn','refreshTouchpointsBtn','refreshAuditSummaryBtn','refreshOpsDashboardBtn','runFirstContactSlaBtn','runSubmissionStaleBtn','runSettlementNurtureBtn','runConsentGapBtn','runNewsletterCadenceBtn']
         .forEach((id) => {
           const el = $(id);
           if (el) el.disabled = v;
@@ -587,6 +603,59 @@ export function renderSidecarUi(config: AppConfig): string {
       const data = await api('/mortgage-au/command-center');
       renderCommandCenter(data.data || {});
       return data;
+    }
+
+    function renderOpsDashboard(data) {
+      const execRoot = $('opsExecutionSummary');
+      const slaRoot = $('opsSlaSummary');
+      const workflowsRoot = $('opsWorkflows');
+      if (!execRoot || !slaRoot || !workflowsRoot) return;
+      const execution = data?.execution || {};
+      const breaches = data?.pipelineHealth?.slaBreaches || {};
+      execRoot.textContent = [
+        'Drafts today: ' + (execution.draftsCreatedToday ?? 0),
+        'Dedupe blocked: ' + (execution.dedupeBlockedToday ?? 0),
+        'Overrides: ' + (execution.overridesToday ?? 0),
+        'Touchpoint errors: ' + (execution.touchpointErrorsToday ?? 0),
+      ].join(' · ');
+      slaRoot.textContent = [
+        'SLA breaches',
+        'First contact >24h: ' + (breaches.firstContact24h ?? 0),
+        'Docs pending >48h: ' + (breaches.docsPending48h ?? 0),
+        'Lender stale >5d: ' + (breaches.lenderStale5d ?? 0),
+      ].join(' · ');
+      const workflows = data?.workflows || [];
+      workflowsRoot.innerHTML = workflows.map((workflow) =>
+        '<div class="queueItem">' +
+          '<div class="title">' + workflow.label + '</div>' +
+          '<div class="meta">' + workflow.count + ' candidates</div>' +
+          '<div class="queueList" style="margin-top:8px;">' +
+            (workflow.applications || []).slice(0, 4).map((item) =>
+              '<div class="queueItem">' +
+                '<div class="title">' + item.applicationId + ' · ' + (item.borrowerName || 'Borrower') + '</div>' +
+                '<div class="meta">' + [item.pipelineStage, item.ageInStageDays + 'd', item.reason, 'Recommended: ' + item.recommendedTouchpointKey].filter(Boolean).join(' · ') + '</div>' +
+              '</div>'
+            ).join('') +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+
+    async function refreshOpsDashboard() {
+      const data = await api('/mortgage-au/ops-dashboard');
+      renderOpsDashboard(data.data || {});
+      return data;
+    }
+
+    async function runWorkflow(path) {
+      return api(path, {
+        method: 'POST',
+        body: JSON.stringify({
+          limit: 6,
+          dryRun: $('workflowDryRun')?.checked === true,
+          ...( $('workflowSelectedOnly')?.checked ? { applicationIds: Array.from(selectedApplicationIds) } : {} ),
+        }),
+      });
     }
 
     async function confirmTouchpointWithOverride(key, applicationId) {
@@ -850,6 +919,7 @@ export function renderSidecarUi(config: AppConfig): string {
           $('refreshCommandCenterBtn') ? refreshCommandCenter() : Promise.resolve(),
           $('refreshTouchpointsBtn') ? refreshTouchpoints() : Promise.resolve(),
           $('refreshAuditSummaryBtn') ? refreshAuditSummary() : Promise.resolve(),
+          $('refreshOpsDashboardBtn') ? refreshOpsDashboard() : Promise.resolve(),
         ]);
       } catch (err) {
         writeLog({ action: label, error: err && err.message ? err.message : String(err) });
@@ -874,6 +944,12 @@ export function renderSidecarUi(config: AppConfig): string {
     if ($('refreshCommandCenterBtn')) $('refreshCommandCenterBtn').onclick = () => wrapAction('refresh-command-center', refreshCommandCenter);
     if ($('refreshTouchpointsBtn')) $('refreshTouchpointsBtn').onclick = () => wrapAction('refresh-touchpoints', refreshTouchpoints);
     if ($('refreshAuditSummaryBtn')) $('refreshAuditSummaryBtn').onclick = () => wrapAction('refresh-audit-summary', refreshAuditSummary);
+    if ($('refreshOpsDashboardBtn')) $('refreshOpsDashboardBtn').onclick = () => wrapAction('refresh-ops-dashboard', refreshOpsDashboard);
+    if ($('runFirstContactSlaBtn')) $('runFirstContactSlaBtn').onclick = () => wrapAction('run-first-contact-sla', () => runWorkflow('/workflows/mortgage/first-contact-sla'));
+    if ($('runSubmissionStaleBtn')) $('runSubmissionStaleBtn').onclick = () => wrapAction('run-submission-stale', () => runWorkflow('/workflows/mortgage/submission-stale'));
+    if ($('runSettlementNurtureBtn')) $('runSettlementNurtureBtn').onclick = () => wrapAction('run-settlement-nurture', () => runWorkflow('/workflows/mortgage/post-settlement-nurture'));
+    if ($('runConsentGapBtn')) $('runConsentGapBtn').onclick = () => wrapAction('run-consent-gap', () => runWorkflow('/workflows/mortgage/consent-gap'));
+    if ($('runNewsletterCadenceBtn')) $('runNewsletterCadenceBtn').onclick = () => wrapAction('run-newsletter-cadence', () => runWorkflow('/workflows/mortgage/newsletter-cadence'));
 
     applyPrefills();
     (async () => {
@@ -885,6 +961,7 @@ export function renderSidecarUi(config: AppConfig): string {
         if ($('refreshCommandCenterBtn')) await refreshCommandCenter();
         if ($('refreshTouchpointsBtn')) await refreshTouchpoints();
         if ($('refreshAuditSummaryBtn')) await refreshAuditSummary();
+        if ($('refreshOpsDashboardBtn')) await refreshOpsDashboard();
       } catch (err) {
         writeLog(err && err.message ? err.message : String(err));
       }
